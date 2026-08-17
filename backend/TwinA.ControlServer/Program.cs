@@ -41,7 +41,7 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
-app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.8.0-dev", time = DateTimeOffset.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.9.0-dev", time = DateTimeOffset.UtcNow }));
 app.MapGet("/api/state", (ControlState state) => state.Snapshot);
 app.MapPost("/api/commands/{command}", async (string command, HttpRequest request, CommandDispatcher dispatcher, CancellationToken ct) =>
 {
@@ -65,7 +65,7 @@ app.MapPost("/api/sounds/upload", async (HttpRequest request, string fileName, S
 });
 app.MapDelete("/api/sounds/{id}", (string id, SoundboardService sounds) => sounds.Delete(id) ? Results.Ok(new { ok=true }) : Results.BadRequest(new { ok=false }));
 
-// DESKTOP v0.8 - live state, tasks, app audio, monitor-aware remote desktop and high-rate binary streaming.
+// DESKTOP v0.9 - live state, tasks, app audio, monitor-aware remote desktop and high-rate binary streaming.
 app.MapGet("/api/desktop/runtime", async (DesktopControlService desktop, CancellationToken ct) =>
     DesktopControlService.JsonData(await desktop.RuntimeAsync(ct)));
 app.MapGet("/api/desktop/windows", async (DesktopControlService desktop, CancellationToken ct) =>
@@ -226,7 +226,7 @@ app.MapPost("/api/flows", async (HttpRequest request, SettingsStore settings, Ca
 app.MapDelete("/api/flows/{id}", (string id, SettingsStore settings) => settings.Update(config => config.Flows.RemoveAll(f => f.Id.Equals(id,StringComparison.OrdinalIgnoreCase))>0) ? Results.Ok(new{ok=true}) : Results.NotFound());
 app.MapGet("/api/settings", (SettingsStore settings) => Results.Ok(new
 {
-    version = "0.8.0-dev",
+    version = "0.9.0-dev",
     settings = settings.Get(),
     configPath = settings.ConfigPath,
     obsPasswordStored = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("TWINA_OBS_PASSWORD")),
