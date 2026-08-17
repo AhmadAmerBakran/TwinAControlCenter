@@ -162,7 +162,7 @@ internal static class WindowRuntime
     {
         var foreground = GetForegroundWindow();
         var result = new List<DesktopWindowState>();
-        _ = EnumWindows((hwnd, _) =>
+        _ = EnumWindows((hwnd, _lParam) =>
         {
             try
             {
