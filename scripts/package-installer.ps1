@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = 'Release',
-    [string]$Runtime = 'win-x64'
+    [string]$Runtime = 'win-x64',
+    [string]$Version = '0.9.0-dev'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,7 +13,7 @@ function Assert-LastExitCode([string]$Step) {
     if ($LASTEXITCODE -ne 0) { throw "$Step failed with exit code $LASTEXITCODE." }
 }
 
-Write-Host 'Building TWIN A before packaging...' -ForegroundColor Cyan
+Write-Host "Building TWIN A $Version before packaging..." -ForegroundColor Cyan
 & (Join-Path $PSScriptRoot 'build.ps1')
 
 Remove-Item $Artifacts -Recurse -Force -ErrorAction SilentlyContinue
@@ -33,6 +34,7 @@ foreach ($item in $projects) {
         --self-contained true `
         -p:PublishSingleFile=false `
         -p:PublishReadyToRun=false `
+        -p:Version=$Version `
         -o $out
     Assert-LastExitCode "Publish $($item.Name)"
 }
@@ -53,7 +55,7 @@ if (-not $innoCandidates) {
 }
 
 $iss = Join-Path $Root 'installer\TwinAControlCenter.iss'
-& $innoCandidates[0] "/DSourceRoot=$Payload" "/DOutputRoot=$Artifacts" $iss
+& $innoCandidates[0] "/DSourceRoot=$Payload" "/DOutputRoot=$Artifacts" "/DAppVersion=$Version" $iss
 Assert-LastExitCode 'Inno Setup compile'
 
 Write-Host "Installer created under $Artifacts" -ForegroundColor Green
