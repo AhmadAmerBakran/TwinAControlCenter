@@ -1,0 +1,67 @@
+# ========================================
+# .NET
+# ========================================
+**/bin/
+**/obj/
+TestResults/
+*.trx
+*.user
+*.suo
+.vs/
+
+# ========================================
+# JetBrains Rider
+# ========================================
+.idea/
+*.sln.iml
+
+# ========================================
+# Angular / Node
+# ========================================
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+coverage/
+
+# Angular build output copied to ASP.NET
+backend/TwinA.ControlServer/wwwroot/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================================
+# Secrets and machine-local configuration
+# ========================================
+.env
+.env.*
+!.env.example
+
+appsettings.Local.json
+appsettings.*.Local.json
+
+config.json
+*.secrets.json
+
+# Certificates / keys
+*.pfx
+*.p12
+*.pem
+*.key
+
+# ========================================
+# Local backups / temporary files
+# ========================================
+*.bak
+*.tmp
+*.log
+
+local-data/
+backups/
+
+# ========================================
+# OS files
+# ========================================
+Thumbs.db
+.DS_Store

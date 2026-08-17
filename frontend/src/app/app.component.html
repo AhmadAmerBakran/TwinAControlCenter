@@ -1,0 +1,294 @@
+<div class="app-shell">
+  <div class="ambient ambient-blue"></div>
+  <div class="ambient ambient-white"></div>
+
+  <aside class="rail" aria-label="Primary navigation">
+    <button class="brand-button" (click)="go('home')" aria-label="TWIN A home">
+      <img src="assets/icon-192.png" alt="TWIN A">
+    </button>
+    <nav>
+      <button *ngFor="let item of pages" class="nav-button" [class.active]="page() === item.id" (click)="go(item.id)">
+        <span class="nav-icon">{{item.icon}}</span><span>{{item.label}}</span>
+      </button>
+    </nav>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar glass">
+      <div class="identity">
+        <img class="mini-logo" src="assets/icon-192.png" alt="">
+        <div><strong>TWIN A</strong><span>CONTROL CENTER</span></div>
+      </div>
+      <div class="status-strip">
+        <span class="status"><i class="dot" [class.green]="control.connected()" [class.red-dot]="!control.connected()"></i>PC</span>
+        <span class="status"><i class="dot" [class.green]="control.snapshot().vpn === 'online'" [class.red-dot]="control.snapshot().vpn !== 'online'"></i>TAILSCALE</span>
+        <span class="status"><i class="dot" [class.green]="control.snapshot().obs === 'ready'" [class.amber]="control.snapshot().obs !== 'ready'"></i>OBS</span>
+      </div>
+      <div class="record-pill" [class.live]="control.snapshot().recording && !control.snapshot().recordingPaused" [class.paused]="control.snapshot().recordingPaused">
+        <span class="record-dot"></span>
+        <div><small>{{recordingStateLabel()}}</small><strong>{{recordingTime()}}</strong></div>
+      </div>
+    </header>
+
+    <!-- HOME -->
+    <section class="page" *ngIf="page() === 'home'">
+      <div class="hero glass">
+        <div class="hero-image"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <div class="eyebrow">COMMAND DECK / LIVE SESSION</div>
+          <h1>Everything important,<br><span>one touch away.</span></h1>
+          <p>{{control.snapshot().sessionName}}</p>
+          <div class="hero-actions">
+            <button class="primary-action" (click)="run('obs.record.toggle', {}, control.snapshot().recording ? 'Recording stopped' : 'Recording started')">
+              <span>{{control.snapshot().recording ? '■' : '●'}}</span>{{control.snapshot().recording ? 'Stop recording' : 'Start recording'}}
+            </button>
+            <button class="secondary-action" (click)="run('app.launch', {app:'obs'}, 'OBS Studio opened')">Open OBS Studio</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid metric-grid">
+        <article class="metric glass"><span>CPU</span><strong>{{control.snapshot().cpu}}%</strong><div class="meter"><i [style.width.%]="control.snapshot().cpu"></i></div></article>
+        <article class="metric glass"><span>GPU</span><strong>{{control.snapshot().gpu}}%</strong><div class="meter"><i [style.width.%]="control.snapshot().gpu"></i></div></article>
+        <article class="metric glass"><span>RAM</span><strong>{{control.snapshot().ram}}%</strong><div class="meter"><i [style.width.%]="control.snapshot().ram"></i></div></article>
+        <article class="metric glass"><span>GPU TEMP</span><strong>{{control.snapshot().gpuTemp}}°</strong><small>CELSIUS</small></article>
+      </div>
+
+      <div class="section-heading"><div><span class="eyebrow">QUICK ACTIONS</span><h2>Core controls</h2></div><button class="text-button" (click)="go('automations')">View workflows →</button></div>
+      <div class="grid action-grid">
+        <button class="action-card glass record" (click)="run('obs.record.toggle')"><span class="action-icon">●</span><div><strong>{{control.snapshot().recording ? 'Stop recording' : 'Start recording'}}</strong><small>OBS capture</small></div><b>→</b></button>
+        <button class="action-card glass" (click)="run('obs.replay.save', {}, 'Replay saved')"><span class="action-icon">↺</span><div><strong>Save replay</strong><small>Replay buffer</small></div><b>→</b></button>
+        <button class="action-card glass" (click)="go('studio')"><span class="action-icon">★</span><div><strong>Mark moment</strong><small>Timestamp editor</small></div><b>→</b></button>
+        <button class="action-card glass" (click)="run('windows.screenshot', {}, 'Screenshot captured')"><span class="action-icon">⌖</span><div><strong>Screenshot</strong><small>Capture desktop</small></div><b>→</b></button>
+        <button class="action-card glass" (click)="run('app.launch', {app:'steam'}, 'Steam launch requested')"><span class="action-icon">◈</span><div><strong>Steam</strong><small>Launch client</small></div><b>→</b></button>
+        <button class="action-card glass" (click)="run('discord.deafen.toggle', {}, 'Discord deafen toggled')"><span class="action-icon">◉</span><div><strong>Discord</strong><small>Deafen toggle</small></div><b>→</b></button>
+      </div>
+    </section>
+
+    <!-- STUDIO -->
+    <section class="page" *ngIf="page() === 'studio'">
+      <div class="page-title studio-title">
+        <div><span class="eyebrow">OBS / REAL-TIME CONTROL</span><h1>Studio</h1></div>
+        <div class="studio-chips">
+          <span class="connection-chip" [class.offline-chip]="!obsReady()"><i class="dot" [class.green]="obsReady()" [class.red-dot]="!obsReady()"></i>{{obsReady() ? 'OBS CONNECTED' : 'OBS OFFLINE'}}</span>
+          <span class="connection-chip">PROGRAM: {{activeScene()}}</span>
+          <span class="connection-chip mode-chip">STUDIO MODE {{control.snapshot().studioMode ? 'ON' : 'OFF'}}</span>
+        </div>
+      </div>
+
+      <div class="studio-status glass">
+        <div><span>RECORDING</span><strong [class.live-text]="control.snapshot().recording && !control.snapshot().recordingPaused" [class.paused-text]="control.snapshot().recordingPaused">{{recordingStateLabel()}}</strong></div>
+        <div><span>DURATION</span><strong class="mono">{{recordingTime()}}</strong></div>
+        <div><span>REPLAY BUFFER</span><strong [class.ready-text]="control.snapshot().replayBuffer">{{control.snapshot().replayBuffer ? 'READY' : 'OFF'}}</strong></div>
+        <div><span>PROGRAM SCENE</span><strong>{{activeScene()}}</strong></div>
+      </div>
+
+      <div class="grid studio-grid">
+        <article class="panel glass span-2">
+          <div class="panel-title">
+            <div><small>LIVE CONTROL</small><h3>Recording & replay</h3></div>
+            <span class="live-clock" [class.live]="control.snapshot().recording && !control.snapshot().recordingPaused" [class.paused-clock]="control.snapshot().recordingPaused">{{recordingTime()}}</span>
+          </div>
+          <div class="button-matrix">
+            <button class="big-control red" [disabled]="!obsReady() || isBusy('obs.record.toggle')" (click)="run('obs.record.toggle', {}, control.snapshot().recording ? 'Recording stopped' : 'Recording started')">
+              <span>{{control.snapshot().recording ? '■' : '●'}}</span>
+              <strong>{{control.snapshot().recording ? 'STOP' : 'RECORD'}}</strong>
+              <small>{{control.snapshot().recording ? 'End capture' : 'Start capture'}}</small>
+            </button>
+            <button class="big-control" [class.active]="control.snapshot().recordingPaused" [disabled]="!obsReady() || !control.snapshot().recording || isBusy('obs.record.pause')" (click)="run('obs.record.pause', {}, control.snapshot().recordingPaused ? 'Recording resumed' : 'Recording paused')">
+              <span>{{control.snapshot().recordingPaused ? '▶' : 'Ⅱ'}}</span>
+              <strong>{{control.snapshot().recordingPaused ? 'RESUME' : 'PAUSE'}}</strong>
+              <small>{{control.snapshot().recordingPaused ? 'Continue capture' : 'Freeze recording'}}</small>
+            </button>
+            <button class="big-control" [class.active]="control.snapshot().replayBuffer" [disabled]="!obsReady() || isBusy('obs.replay.toggle')" (click)="run('obs.replay.toggle', {}, control.snapshot().replayBuffer ? 'Replay Buffer stopped' : 'Replay Buffer started')">
+              <span>↻</span>
+              <strong>{{control.snapshot().replayBuffer ? 'STOP REPLAY' : 'START REPLAY'}}</strong>
+              <small>{{control.snapshot().replayBuffer ? 'Buffer is ready' : 'Enable instant replay'}}</small>
+            </button>
+            <button class="big-control blue" [disabled]="!obsReady() || !control.snapshot().replayBuffer || isBusy('obs.replay.save')" (click)="run('obs.replay.save',{},'Replay saved')">
+              <span>↓</span>
+              <strong>SAVE CLIP</strong>
+              <small>{{control.snapshot().replayBuffer ? 'Write replay to disk' : 'Start Replay Buffer first'}}</small>
+            </button>
+          </div>
+        </article>
+
+        <article class="panel glass scenes-panel">
+          <div class="panel-title">
+            <div><small>SCENES / LIVE PROGRAM</small><h3>Switch scene</h3></div>
+            <span class="source-count">{{control.snapshot().scenes.length}} scenes</span>
+          </div>
+          <div class="scene-list" *ngIf="control.snapshot().scenes.length; else noScenes">
+            <button *ngFor="let scene of control.snapshot().scenes" [class.active]="activeScene()===scene" [disabled]="!obsReady() || activeScene()===scene || isBusy('obs.scene.set')" (click)="run('obs.scene.set',{scene},`Live scene: ${scene}`)">
+              <i></i><span class="scene-name">{{scene}}</span><b>{{activeScene()===scene ? 'LIVE' : 'GO'}}</b>
+            </button>
+          </div>
+          <ng-template #noScenes><div class="empty-state">{{obsReady() ? 'OBS returned no scenes.' : 'Connect OBS to load scenes.'}}</div></ng-template>
+          <p class="panel-hint" *ngIf="!control.snapshot().studioMode">Studio Mode is off, so scene taps switch the live Program immediately.</p>
+        </article>
+
+        <article class="panel glass span-2 marker-panel">
+          <div class="panel-title"><div><small>SESSION MEMORY</small><h3>Mark this moment</h3></div><span class="subtle">{{recordingTime()}}</span></div>
+          <div class="marker-grid">
+            <button (click)="mark('BOSS')">♛<span>Boss</span></button><button (click)="mark('ACHIEVEMENT')">◆<span>Achievement</span></button>
+            <button (click)="mark('FUNNY')">☺<span>Funny</span></button><button (click)="mark('SECRET')">✦<span>Secret</span></button>
+            <button (click)="mark('DEATH')">☠<span>Death</span></button><button (click)="mark('BUG')">⚠<span>Bug</span></button>
+          </div>
+          <div class="note-row"><input [ngModel]="note()" (ngModelChange)="setNote($event)" placeholder="Optional note, e.g. 'thumbnail candidate'"><button (click)="mark('NOTE')">Save note</button></div>
+        </article>
+
+        <article class="panel glass audio-sources-panel">
+          <div class="panel-title">
+            <div><small>OBS AUDIO MIXER</small><h3>Live sources</h3></div>
+            <span class="source-count">{{control.snapshot().obsAudioSources.length}} sources</span>
+          </div>
+          <div class="audio-source-list" *ngIf="control.snapshot().obsAudioSources.length; else noAudioSources">
+            <button class="source-row rich-source" *ngFor="let source of control.snapshot().obsAudioSources" [class.source-muted]="source.muted" [disabled]="!obsReady() || isBusy('obs.input.mute.toggle')" (click)="run('obs.input.mute.toggle',{inputName:source.name},source.muted ? `${source.name} live` : `${source.name} muted`)">
+              <span class="source-main"><i class="source-glyph">{{sourceIcon(source.name)}}</i><span><strong>{{source.name}}</strong><small>{{formatDb(source.volumeDb)}} configured gain</small></span></span>
+              <span class="source-state"><i class="dot" [class.green]="!source.muted" [class.red-dot]="source.muted"></i><b>{{source.muted ? 'MUTED':'LIVE'}}</b></span>
+            </button>
+          </div>
+          <ng-template #noAudioSources><div class="empty-state">{{obsReady() ? 'No OBS audio-capable inputs were detected.' : 'Connect OBS to load audio sources.'}}</div></ng-template>
+          <p class="panel-hint">Mute state is read back from OBS after every command. Volume shown here is the source's configured OBS gain, not a live peak meter.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- AUDIO -->
+    <section class="page" *ngIf="page() === 'audio'">
+      <div class="page-title"><div><span class="eyebrow">WINDOWS + OBS + DISCORD</span><h1>Audio</h1></div><button class="secondary-action" (click)="refreshAudio()">Refresh devices</button></div>
+      <div class="grid two-col">
+        <article class="panel glass">
+          <div class="panel-title"><div><small>WINDOWS OUTPUT</small><h3>Master audio</h3></div><strong>{{control.snapshot().masterVolume}}%</strong></div>
+          <input class="range" type="range" min="0" max="100" [value]="control.snapshot().masterVolume" (change)="run('audio.master.set',{value:$any($event.target).value},'Volume changed')">
+          <div class="mini-actions"><button (click)="run('audio.master.down',{},'Volume changed')">−</button><button (click)="run('audio.master.mute',{},control.snapshot().masterMuted ? 'Audio unmuted' : 'Audio muted')">{{control.snapshot().masterMuted ? 'Unmute':'Mute'}}</button><button (click)="run('audio.master.up',{},'Volume changed')">+</button></div>
+          <p class="security-note">Real Windows master endpoint. Keyboard/taskbar changes continue to sync back to the iPad. Device switching changes the Windows default endpoint; apps configured to a fixed device may keep their own route.</p>
+        </article>
+
+        <article class="panel glass">
+          <div class="panel-title"><div><small>WINDOWS ROUTING</small><h3>Playback + microphone</h3></div><span class="source-count">{{audioDevices().length}} endpoints</span></div>
+          <div class="device-group"><small>OUTPUT</small><button class="device-row" *ngFor="let d of audioFor('render')" [class.active]="d.isDefault" (click)="setAudioDevice(d)"><span><i class="dot" [class.green]="d.isDefault"></i>{{d.name}}</span><b>{{d.isDefault?'DEFAULT':'SELECT'}}</b></button></div>
+          <div class="device-group"><small>INPUT</small><button class="device-row" *ngFor="let d of audioFor('capture')" [class.active]="d.isDefault" (click)="setAudioDevice(d)"><span><i class="dot" [class.green]="d.isDefault"></i>{{d.name}}</span><b>{{d.isDefault?'DEFAULT':'SELECT'}}</b></button></div>
+        </article>
+
+        <article class="panel glass">
+          <div class="panel-title"><div><small>DISCORD</small><h3>Voice controls</h3></div><span class="source-count">native shortcuts</span></div>
+          <div class="button-matrix discord-grid">
+            <button class="big-control" (click)="run('discord.mute.toggle')"><span>🎤</span><strong>MUTE</strong><small>Ctrl + Shift + M</small></button>
+            <button class="big-control" (click)="run('discord.deafen.toggle')"><span>🎧</span><strong>DEAFEN</strong><small>Ctrl + Shift + D</small></button>
+            <button class="big-control" (click)="run('discord.soundboard.open')"><span>🔊</span><strong>SOUNDBOARD</strong><small>Open Discord board</small></button>
+            <button class="big-control" (click)="run('app.launch',{app:'discord'},'Discord opened')"><span>◉</span><strong>DISCORD</strong><small>Open client</small></button>
+          </div>
+          <p class="panel-hint">Discord does not expose a supported external API for the final mute/deafen state or individual server sound buttons, so those actions are reported as executed but state-unverified.</p>
+        </article>
+
+        <article class="panel glass">
+          <div class="panel-title"><div><small>OBS MIXER</small><h3>Recording sources</h3></div><span class="source-count">{{control.snapshot().obsAudioSources.length}} sources</span></div>
+          <div class="audio-source-list" *ngIf="control.snapshot().obsAudioSources.length; else audioObsEmpty"><button class="source-row rich-source" *ngFor="let source of control.snapshot().obsAudioSources" [class.source-muted]="source.muted" (click)="run('obs.input.mute.toggle',{inputName:source.name},source.muted ? `${source.name} live` : `${source.name} muted`)"><span class="source-main"><i class="source-glyph">{{sourceIcon(source.name)}}</i><span><strong>{{source.name}}</strong><small>{{formatDb(source.volumeDb)}} configured gain</small></span></span><span class="source-state"><i class="dot" [class.green]="!source.muted" [class.red-dot]="source.muted"></i><b>{{source.muted?'MUTED':'LIVE'}}</b></span></button></div>
+          <ng-template #audioObsEmpty><div class="empty-state">{{obsReady()?'No OBS audio inputs detected.':'OBS is offline.'}}</div></ng-template>
+        </article>
+
+        <article class="panel glass soundboard-panel">
+          <div class="panel-title"><div><small>TWIN A SOUNDBOARD</small><h3>Local / OBS sounds</h3></div><label class="upload-button">＋ ADD SOUND<input type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.wma" (change)="uploadSound($event)"></label></div>
+          <div class="sound-volume"><span>Sound volume</span><b>{{soundVolume}}%</b><input type="range" min="0" max="100" [(ngModel)]="soundVolume"></div>
+          <div class="sound-grid modern-sounds" *ngIf="sounds().length; else noSounds"><div class="sound-tile" *ngFor="let s of sounds()"><button (click)="run('sound.play',{id:s.id,volume:soundVolume},`${s.name} playback started`)"><span>♪</span><strong>{{s.name}}</strong><small>{{s.extension | uppercase}} • {{formatBytes(s.size)}}</small></button><button class="tile-delete" (click)="deleteSound(s)" aria-label="Delete sound">×</button></div></div>
+          <ng-template #noSounds><div class="empty-state">No custom sounds yet. Add WAV, MP3, M4A, AAC or WMA files from the iPad.</div></ng-template><p class="panel-hint">TWIN A plays these through the current Windows default output. OBS hears them when that output is captured. They are not injected into Discord voice without an external virtual-audio route.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- GAMES -->
+    <section class="page" *ngIf="page() === 'games'">
+      <div class="page-title"><div><span class="eyebrow">STEAM + CUSTOM LAUNCHER</span><h1>Games</h1></div><div class="header-actions"><button class="secondary-action" (click)="refreshGames()">Rescan</button><button class="primary-action compact" (click)="openGameEditor()">＋ Add custom</button></div></div>
+      <div class="grid game-grid dynamic-games">
+        <button class="game-card glass feature" (click)="run('game.library.open',{},'Steam Library opened')"><span>STEAM</span><strong>Library</strong><small>Open directly to Library</small></button>
+        <article class="game-card glass game-real" *ngFor="let game of games()" [class.running-card]="game.running">
+          <span>{{game.custom?'CUSTOM':'STEAM '+game.appId}}</span><strong>{{game.name}}</strong><small>{{game.running ? '● RUNNING' : (game.installed ? 'Installed' : 'Unavailable')}}</small>
+          <div class="card-actions"><button (click)="launchGame(game)">PLAY</button><button (click)="openProfileEditor(game)">PROFILE</button><button *ngIf="game.custom" (click)="openGameEditor(game)">EDIT</button><button *ngIf="game.custom" class="danger-mini" (click)="deleteCustomGame(game)">×</button></div>
+        </article>
+      </div>
+      <p class="security-note">Steam titles are discovered from every library in <code>libraryfolders.vdf</code>. Launch verification looks for a real process inside each game's install folder.</p>
+    </section>
+
+    <!-- SYSTEM -->
+    <section class="page" *ngIf="page() === 'system'">
+      <div class="page-title"><div><span class="eyebrow">WINDOWS CONTROL + LIVE TELEMETRY</span><h1>System</h1></div><button class="secondary-action" (click)="refreshSystem()">Refresh details</button></div>
+      <div class="grid metric-grid system-metrics"><article class="metric glass"><span>CPU</span><strong>{{control.snapshot().cpu}}%</strong></article><article class="metric glass"><span>GPU</span><strong>{{control.snapshot().gpu}}%</strong></article><article class="metric glass"><span>RAM</span><strong>{{control.snapshot().ram}}%</strong></article><article class="metric glass"><span>NET ↓</span><strong>{{control.snapshot().networkDownMbps | number:'1.0-1'}}</strong><small>Mbps</small></article></div>
+      <div class="grid two-col system-detail-grid" *ngIf="systemDetails() as sys">
+        <article class="panel glass"><div class="panel-title"><div><small>NETWORK</small><h3>{{sys.network.name}}</h3></div><b>{{sys.network.linkSpeed}}</b></div><div class="network-live"><div><span>DOWNLOAD</span><strong>↓ {{control.snapshot().networkDownMbps | number:'1.0-2'}} Mbps</strong></div><div><span>UPLOAD</span><strong>↑ {{control.snapshot().networkUpMbps | number:'1.0-2'}} Mbps</strong></div></div><p class="panel-hint">{{sys.network.description}}. Tailscale, VirtualBox, VPN and tunnel adapters are excluded from the primary internet metric.</p></article>
+        <article class="panel glass"><div class="panel-title"><div><small>HOST</small><h3>{{sys.machineName}}</h3></div></div><div class="list-row"><span>OS</span><b>{{sys.osDescription}}</b></div><div class="list-row"><span>Uptime</span><b>{{formatUptime(sys.uptime)}}</b></div><div class="list-row"><span>GPU temperature</span><b>{{control.snapshot().gpuTemp}}°C</b></div></article>
+      </div>
+      <div class="grid drive-grid" *ngIf="systemDetails() as sys"><article class="metric glass" *ngFor="let d of sys.drives"><span>{{d.name}} {{d.label}}</span><strong>{{formatBytes(d.freeBytes)}}</strong><small>free of {{formatBytes(d.totalBytes)}} • {{d.format}}</small></article></div>
+      <div class="grid action-grid system-actions"><button class="action-card glass" (click)="run('app.launch',{app:'taskmgr'})"><span class="action-icon">▥</span><div><strong>Task Manager</strong><small>Open locally</small></div></button><button class="action-card glass" (click)="run('windows.desktop.show')"><span class="action-icon">▣</span><div><strong>Show desktop</strong><small>Win + D</small></div></button><button class="action-card glass" (click)="run('windows.lock')"><span class="action-icon">⌾</span><div><strong>Lock PC</strong><small>Secure session</small></div></button><button class="action-card glass" (click)="run('windows.screenshot',{},'Screenshot captured')"><span class="action-icon">⌖</span><div><strong>Screenshot</strong><small>Capture + verify file</small></div></button><button class="action-card glass" (click)="run('windows.screenshot.folder.open',{},'Screenshot folder opened')"><span class="action-icon">▤</span><div><strong>Screenshots</strong><small>Open actual save folder</small></div></button></div>
+      <article class="panel glass danger-zone"><div><small>POWER</small><h3>Protected actions</h3><p>Power commands require confirmation unless you explicitly disable it in Settings.</p></div><div><button (click)="holdDanger('windows.sleep','Sleep PC')">Sleep</button><button (click)="holdDanger('windows.restart','Restart PC')">Restart</button><button class="danger" (click)="holdDanger('windows.shutdown','Shut down PC')">Shut down</button></div></article>
+    </section>
+
+    <!-- FILES -->
+    <section class="page" *ngIf="page() === 'files'">
+      <div class="page-title"><div><span class="eyebrow">THIS PC / REAL FILESYSTEM</span><h1>Files</h1></div><div class="header-actions"><label class="secondary-action upload-button">Upload<input type="file" (change)="uploadFile($event)"></label><button class="secondary-action" (click)="createFolder()">New folder</button></div></div>
+      <div class="drive-tabs"><button *ngFor="let d of drives()" [class.active]="currentPath.startsWith(d.name)" (click)="openPath(d.name)"><strong>{{d.name}}</strong><small>{{formatBytes(d.freeBytes)}} free</small></button></div>
+      <div class="file-toolbar glass"><button (click)="fileUp()">← Up</button><div class="path-field">{{currentPath || 'Select a drive'}}</div><button (click)="openPath(currentPath)" [disabled]="!currentPath">↻</button></div>
+      <article class="panel glass file-panel"><div class="file-row v5 head"><span>Name</span><span>Modified</span><span>Size</span><span>Actions</span></div>
+        <div class="file-row v5" *ngFor="let f of fileEntries()"><button class="file-name" (dblclick)="fileOpen(f)" (click)="f.isDirectory && fileOpen(f)"><i>{{f.isDirectory?'▰':'▤'}}</i><span><strong>{{f.name}}</strong><small *ngIf="f.protected">PROTECTED / READ-ONLY ACTIONS</small></span></button><span>{{f.modifiedAt | date:'short'}}</span><span>{{f.isDirectory?'—':formatBytes(f.size)}}</span><div class="file-actions"><button *ngIf="f.isDirectory" (click)="fileOpen(f)">BROWSE</button><button (click)="fileOpenOnPc(f)">PC</button><button *ngIf="!f.isDirectory" (click)="downloadFile(f)">↓</button><button (click)="copyFile(f)" [disabled]="f.protected">C</button><button (click)="moveFile(f)" [disabled]="f.protected">M</button><button (click)="renameFile(f)" [disabled]="f.protected">✎</button><button class="danger-mini" (click)="deleteFile(f)" [disabled]="f.protected">×</button></div></div>
+        <div class="empty-state" *ngIf="!fileEntries().length && !fileBusy">This folder is empty.</div>
+      </article>
+      <p class="security-note">All ready fixed/removable drives are browsable. Windows, Program Files and drive roots are protected from destructive mutations by default, but files can still be viewed/downloaded.</p>
+    </section>
+
+    <!-- DEV -->
+    <section class="page" *ngIf="page() === 'dev'">
+      <div class="page-title"><div><span class="eyebrow">REAL PROJECT WORKSPACE</span><h1>Dev</h1></div><button class="primary-action compact" (click)="openDevEditor()">＋ Add project</button></div>
+      <div class="project-tabs"><button *ngFor="let p of projects()" [class.active]="devSelected===p.id" (click)="devSelected=p.id;loadDevStatus()"><span>{{p.name}}</span><small>{{p.workingDirectory}}</small></button></div>
+      <div class="grid two-col" *ngIf="devStatus() as st">
+        <article class="panel glass"><div class="panel-title"><div><small>PROJECT</small><h3>{{st.name}}</h3></div><span class="connection-chip" [class.offline-chip]="!st.exists">{{st.exists?'READY':'MISSING'}}</span></div><div class="list-row"><span>Branch</span><b>{{st.branch}}</b></div><div class="list-row"><span>Git</span><b>{{st.gitSummary}}</b></div><div class="list-row"><span>Path</span><b class="truncate">{{st.workingDirectory}}</b></div><div class="inline-buttons"><button (click)="openDevEditor(selectedProject())">Edit</button><button class="danger-mini" *ngIf="devSelected!=='twina'" (click)="deleteDevProject(selectedProject())">Remove</button></div></article>
+        <article class="panel glass"><div class="panel-title"><div><small>TOOLCHAIN</small><h3>Detected locally</h3></div></div><div class="list-row"><span>.NET</span><b>{{st.dotnetVersion}}</b></div><div class="list-row"><span>Node</span><b>{{st.nodeVersion}}</b></div><div class="list-row"><span>Git</span><b>{{st.gitVersion}}</b></div><div class="list-row"><span>Docker</span><b [class.warning-text]="st.dockerVersion==='NOT INSTALLED'">{{st.dockerVersion}}</b></div></article>
+        <article class="panel glass span-2"><div class="button-matrix dev-buttons"><button class="big-control" (click)="devAction('build')"><span>▶</span><strong>BUILD</strong></button><button class="big-control" (click)="devAction('test')"><span>✓</span><strong>TEST</strong></button><button class="big-control" (click)="devAction('run')"><span>↗</span><strong>RUN</strong></button><button class="big-control" (click)="devAction('rider')"><span>⌘</span><strong>RIDER</strong></button><button class="big-control" (click)="devAction('folder')"><span>▤</span><strong>FOLDER</strong></button></div></article>
+        <article class="panel glass span-2 terminal-panel"><div class="panel-title"><div><small>LAST RESULT</small><h3>Command output</h3></div></div><pre>{{devOutput || 'Run Build/Test to see verified command output here.'}}</pre></article>
+      </div>
+    </section>
+
+    <!-- IOT -->
+    <section class="page" *ngIf="page() === 'iot'">
+      <div class="page-title"><div><span class="eyebrow">MQTT / REAL DEVICES ONLY</span><h1>IoT</h1></div><button class="primary-action compact" (click)="openIotDeviceEditor()">＋ Add device</button></div>
+      <div class="grid metric-grid"><article class="metric glass"><span>MQTT</span><strong class="small-value">{{settingsEnvelope()?.settings?.mqtt?.enabled ? 'ENABLED':'NOT CONFIGURED'}}</strong></article><article class="metric glass"><span>DEVICES</span><strong>{{settingsEnvelope()?.settings?.mqtt?.devices?.length || 0}}</strong></article><article class="metric glass"><span>BROKER</span><strong class="small-value">{{settingsEnvelope()?.settings?.mqtt?.host || '—'}}</strong></article><article class="metric glass"><span>PORT</span><strong>{{settingsEnvelope()?.settings?.mqtt?.port || 1883}}</strong></article></div>
+      <article class="panel glass mqtt-panel" *ngIf="settingsEnvelope() as env"><div class="panel-title"><div><small>CONNECTION</small><h3>MQTT broker</h3></div><span class="connection-chip">PASSWORD {{env.mqttPasswordStored?'STORED LOCALLY':'NOT STORED'}}</span></div><div class="form-grid"><label><span>Enabled</span><input type="checkbox" [ngModel]="env.settings.mqtt.enabled" (ngModelChange)="setMqtt('enabled',$event)"></label><label><span>Host</span><input [ngModel]="env.settings.mqtt.host" (ngModelChange)="setMqtt('host',$event)" placeholder="192.168.1.10"></label><label><span>Port</span><input type="number" [ngModel]="env.settings.mqtt.port" (ngModelChange)="setMqtt('port',$event)"></label><label><span>TLS</span><input type="checkbox" [ngModel]="env.settings.mqtt.tls" (ngModelChange)="setMqtt('tls',$event)"></label><label><span>Username</span><input [ngModel]="env.settings.mqtt.username" (ngModelChange)="setMqtt('username',$event)"></label></div><div class="inline-buttons"><button class="primary-action compact" (click)="saveSettings()">Save broker settings</button><button class="secondary-action" (click)="testIot()">Verify MQTT login</button><button class="secondary-action" (click)="refreshIotStates()">Refresh states</button></div><p class="panel-hint">{{iotMessage || 'No broker is configured yet. When you add one, TWIN A connects using the MQTT protocol and verifies device commands from their state topics when available.'}}</p></article>
+      <div class="iot-device-grid" *ngIf="settingsEnvelope() as env"><article class="panel glass iot-device" *ngFor="let d of env.settings.mqtt.devices"><div class="panel-title"><div><small>MQTT DEVICE</small><h3>{{d.name}}</h3></div><span class="connection-chip" [class.offline-chip]="!iotState(d.id)?.online">{{iotState(d.id)?.online?'STATE SEEN':'STATE UNKNOWN'}}</span></div><div class="list-row"><span>State</span><b>{{iotState(d.id)?.value ?? '—'}}</b></div><div class="list-row"><span>State topic</span><b class="truncate">{{d.stateTopic || 'Not configured'}}</b></div><div class="list-row"><span>Command topic</span><b class="truncate">{{d.commandTopic || 'Not configured'}}</b></div><div class="iot-actions"><button class="verified-button" (click)="toggleIotDevice(d,true)">ON</button><button (click)="toggleIotDevice(d,false)">OFF</button><button (click)="openIotDeviceEditor(d)">EDIT</button><button class="danger-mini" (click)="deleteIotDevice(d)">×</button></div></article><div class="empty-state panel glass" *ngIf="!env.settings.mqtt.devices.length">No IoT devices configured. Nothing is simulated. Add a broker and device only when you have real MQTT hardware/services to control.</div></div>
+    </section>
+
+    <!-- AUTOMATIONS -->
+    <section class="page" *ngIf="page() === 'automations'">
+      <div class="page-title"><div><span class="eyebrow">VERIFIED MULTI-STEP AUTOMATION</span><h1>Flows</h1></div><button class="primary-action compact" (click)="openFlowEditor()">＋ New flow</button></div>
+      <div class="flow-list"><article class="flow glass" *ngFor="let flow of flows();let i=index"><div class="flow-index">{{flowNumber(i)}}</div><div><small>{{flow.category}}</small><h3>{{flow.name}}</h3><p>{{flow.steps.length}} step(s): <span *ngFor="let step of flow.steps;let last=last">{{step.command}}{{last?'':' → '}}</span></p></div><div class="flow-actions"><button (click)="runFlow(flow)">RUN</button><button (click)="openFlowEditor(flow)">EDIT</button><button class="danger-mini" (click)="deleteFlow(flow)">×</button></div></article><div class="empty-state" *ngIf="!flows().length">No flows configured.</div></div>
+      <article class="panel glass terminal-panel" *ngIf="devOutput"><div class="panel-title"><div><small>FLOW TRACE</small><h3>Last execution</h3></div></div><pre>{{devOutput}}</pre></article>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="page" *ngIf="page() === 'settings'">
+      <div class="page-title"><div><span class="eyebrow">PERSISTENT LOCAL CONFIGURATION</span><h1>Settings</h1></div><button class="primary-action compact" (click)="saveSettings()">Save settings</button></div>
+      <div class="grid two-col" *ngIf="settingsEnvelope() as env">
+        <article class="panel glass"><div class="panel-title"><div><small>CONNECTION</small><h3>Private access</h3></div></div><div class="list-row"><span>Tailscale</span><b [class.green-text]="control.snapshot().vpn === 'online'">{{control.snapshot().vpn | uppercase}}</b></div><div class="list-row"><span>Desktop Agent</span><b [class.green-text]="control.snapshot().agent === 'online'">{{control.snapshot().agent | uppercase}}</b></div><div class="list-row"><span>OBS</span><b [class.green-text]="control.snapshot().obs === 'ready'">{{control.snapshot().obs | uppercase}}</b></div><div class="list-row"><span>OBS secret</span><b [class.green-text]="env.obsPasswordStored">{{env.obsPasswordStored?'STORED LOCALLY':'NOT STORED'}}</b></div><div class="list-row"><span>Server</span><b>127.0.0.1:5055</b></div></article>
+        <article class="panel glass"><div class="panel-title"><div><small>SECURITY</small><h3>Guard rails</h3></div></div><label class="toggle-row"><span><b>Confirm power actions</b><small>Prompt before sleep/restart/shutdown.</small></span><input type="checkbox" [ngModel]="env.settings.ui.confirmPowerActions" (ngModelChange)="setUi('confirmPowerActions',$event)"></label><label class="toggle-row"><span><b>Protect Windows/system paths</b><small>Browse/download allowed, destructive mutations blocked.</small></span><input type="checkbox" [ngModel]="env.settings.ui.protectSystemPaths" (ngModelChange)="setUi('protectSystemPaths',$event)"></label></article>
+        <article class="panel glass"><div class="panel-title"><div><small>CONFIGURATION</small><h3>Local storage</h3></div></div><div class="list-row"><span>Version</span><b>{{env.version}}</b></div><div class="list-row"><span>Config file</span><b class="truncate">{{env.configPath}}</b></div><div class="list-row"><span>Custom games</span><b>{{env.settings.customGames.length}}</b></div><div class="list-row"><span>Dev projects</span><b>{{env.settings.devProjects.length}}</b></div><div class="list-row"><span>Flows</span><b>{{env.settings.flows.length}}</b></div><p class="panel-hint">Games, projects, flows and IoT settings are data now — adding them no longer requires a source-code patch.</p></article>
+        <article class="panel glass"><div class="panel-title"><div><small>CAPABILITIES</small><h3>Current machine</h3></div></div><div class="list-row"><span>Steam discovery</span><b>ENABLED</b></div><div class="list-row"><span>Full-drive browser</span><b>ENABLED</b></div><div class="list-row"><span>Discord native controls</span><b>ENABLED</b></div><div class="list-row"><span>IoT</span><b>{{env.settings.mqtt.enabled?'CONFIGURED':'NOT CONFIGURED'}}</b></div></article>
+      </div>
+    </section>
+
+    <!-- GAME EDITOR -->
+    <div class="modal-backdrop" *ngIf="gameEditorOpen"><section class="modal glass"><div class="modal-title"><div><small>GAME PROFILE</small><h2>{{gameDraft.id?'Edit game':'Add custom game'}}</h2></div><button (click)="gameEditorOpen=false">×</button></div><div class="form-grid"><label><span>Name</span><input [(ngModel)]="gameDraft.name"></label><label><span>Executable / URI</span><input [(ngModel)]="gameDraft.launchTarget" placeholder="D:\Games\game.exe"></label><label><span>Arguments</span><input [(ngModel)]="gameDraft.arguments"></label><label><span>Process name for verification</span><input [(ngModel)]="gameDraft.processName" placeholder="game.exe"></label><label><span>Working directory</span><input [(ngModel)]="gameDraft.workingDirectory"></label></div><div class="modal-actions"><button class="secondary-action" (click)="gameEditorOpen=false">Cancel</button><button class="primary-action compact" (click)="saveGame()">Save game</button></div></section></div>
+
+    <!-- GAME PROFILE EDITOR -->
+    <div class="modal-backdrop" *ngIf="profileEditorOpen"><section class="modal glass"><div class="modal-title"><div><small>AUTOMATION PROFILE</small><h2>{{profileGame?.name}}</h2></div><button (click)="profileEditorOpen=false">×</button></div><div class="form-grid"><label class="toggle-row"><span><b>Ensure OBS is open</b><small>Launch and verify obs64.exe if needed.</small></span><input type="checkbox" [(ngModel)]="profileDraft.launchObs"></label><label class="toggle-row"><span><b>Ensure Discord is open</b><small>Launch and verify Discord if needed.</small></span><input type="checkbox" [(ngModel)]="profileDraft.launchDiscord"></label><label><span>Windows audio output</span><select [(ngModel)]="profileDraft.audioOutputDeviceId"><option [ngValue]="null">Keep current output</option><option *ngFor="let d of audioFor('render')" [ngValue]="d.id">{{d.name}}</option></select></label><label><span>Windows master volume</span><input type="number" min="0" max="100" [(ngModel)]="profileDraft.masterVolume" placeholder="Keep current"></label><label><span>OBS scene after launch</span><select [(ngModel)]="profileDraft.obsScene"><option [ngValue]="null">Keep current</option><option *ngFor="let scene of control.snapshot().scenes" [ngValue]="scene">{{scene}}</option></select></label><label class="toggle-row"><span><b>Ensure Replay Buffer</b><small>Start it only if currently off.</small></span><input type="checkbox" [(ngModel)]="profileDraft.ensureReplayBuffer"></label><label class="toggle-row"><span><b>Ensure Recording</b><small>Start it only if currently stopped.</small></span><input type="checkbox" [(ngModel)]="profileDraft.ensureRecording"></label></div><p class="panel-hint">Profile actions are state-aware: TWIN A checks OBS first and does not blindly toggle recording/replay if they are already active.</p><div class="modal-actions"><button class="danger-mini" *ngIf="profileGame && hasGameProfile(profileGame.id)" (click)="deleteGameProfile()">Remove profile</button><span class="modal-spacer"></span><button class="secondary-action" (click)="profileEditorOpen=false">Cancel</button><button class="primary-action compact" (click)="saveGameProfile()">Save profile</button></div></section></div>
+
+    <!-- DEV EDITOR -->
+    <div class="modal-backdrop" *ngIf="devEditorOpen"><section class="modal glass wide-modal"><div class="modal-title"><div><small>DEVELOPER PROJECT</small><h2>{{devDraft.id?'Edit project':'Add project'}}</h2></div><button (click)="devEditorOpen=false">×</button></div><div class="form-grid"><label><span>Name</span><input [(ngModel)]="devDraft.name"></label><label><span>Working directory</span><input [(ngModel)]="devDraft.workingDirectory"></label><label><span>Solution / project</span><input [(ngModel)]="devDraft.solutionOrProject"></label><label><span>Rider path</span><input [(ngModel)]="devDraft.idePath"></label><label class="span-2"><span>Build command</span><input [(ngModel)]="devDraft.buildCommand"></label><label class="span-2"><span>Test command</span><input [(ngModel)]="devDraft.testCommand"></label><label class="span-2"><span>Run command</span><input [(ngModel)]="devDraft.runCommand"></label></div><div class="modal-actions"><button class="secondary-action" (click)="devEditorOpen=false">Cancel</button><button class="primary-action compact" (click)="saveDevProject()">Save project</button></div></section></div>
+
+    <!-- IOT DEVICE EDITOR -->
+    <div class="modal-backdrop" *ngIf="iotDeviceEditorOpen"><section class="modal glass"><div class="modal-title"><div><small>MQTT DEVICE</small><h2>{{iotDeviceDraft.id?'Edit device':'Add device'}}</h2></div><button (click)="iotDeviceEditorOpen=false">×</button></div><div class="form-grid"><label><span>Name</span><input [(ngModel)]="iotDeviceDraft.name" placeholder="Desk light"></label><label><span>State topic</span><input [(ngModel)]="iotDeviceDraft.stateTopic" placeholder="home/desk/light/state"></label><label><span>Command topic</span><input [(ngModel)]="iotDeviceDraft.commandTopic" placeholder="home/desk/light/set"></label><label><span>ON payload</span><input [(ngModel)]="iotDeviceDraft.onPayload" placeholder="ON"></label><label><span>OFF payload</span><input [(ngModel)]="iotDeviceDraft.offPayload" placeholder="OFF"></label></div><p class="panel-hint">If a state topic is supplied, TWIN A subscribes before sending the command and only reports VERIFIED when the expected state payload comes back. Without a state topic, publishing is reported as executed but unverified.</p><div class="modal-actions"><button class="secondary-action" (click)="iotDeviceEditorOpen=false">Cancel</button><button class="primary-action compact" (click)="saveIotDevice()">Save device</button></div></section></div>
+
+    <!-- FLOW EDITOR -->
+    <div class="modal-backdrop" *ngIf="flowEditorOpen"><section class="modal glass wide-modal flow-editor"><div class="modal-title"><div><small>WORKFLOW BUILDER</small><h2>{{flowDraft.id?'Edit flow':'New flow'}}</h2></div><button (click)="flowEditorOpen=false">×</button></div><div class="form-grid"><label><span>Name</span><input [(ngModel)]="flowDraft.name"></label><label><span>Category</span><input [(ngModel)]="flowDraft.category"></label></div><div class="flow-step-editor"><div class="flow-step-row" *ngFor="let step of flowDraft.steps;let i=index"><span>{{i+1}}</span><select [(ngModel)]="step.command"><option value="app.launch">Launch app</option><option value="game.library.open">Open Steam Library</option><option value="game.launch">Launch game</option><option value="obs.record.start">Ensure recording ON</option><option value="obs.record.stop">Ensure recording OFF</option><option value="obs.record.toggle">Toggle recording</option><option value="obs.record.pause">Pause/resume recording</option><option value="obs.replay.start">Ensure replay ON</option><option value="obs.replay.stop">Ensure replay OFF</option><option value="obs.replay.toggle">Toggle replay buffer</option><option value="obs.replay.save">Save replay</option><option value="obs.scene.set">Set OBS scene</option><option value="obs.input.mute.toggle">Toggle OBS input mute</option><option value="audio.master.set">Set Windows volume</option><option value="audio.device.set">Set audio device</option><option value="sound.play">Play TWIN A sound</option><option value="discord.mute.toggle">Discord mute</option><option value="discord.deafen.toggle">Discord deafen</option><option value="discord.soundboard.open">Open Discord soundboard</option><option value="windows.screenshot">Screenshot</option><option value="files.open">Open file/folder on PC</option><option value="dev.execute">Developer action</option><option value="iot.toggle">MQTT device ON/OFF</option></select><input [ngModel]="payloadText(step)" (ngModelChange)="setPayloadText(step,$event)" placeholder="app=obs; scene=Gameplay"><input type="number" [(ngModel)]="step.delayAfterMs" title="Delay after (ms)"><label class="tiny-check"><input type="checkbox" [(ngModel)]="step.continueOnError">continue</label><button class="danger-mini" (click)="removeFlowStep(i)">×</button></div></div><button class="wide-button" (click)="addFlowStep()">＋ Add step</button><div class="modal-actions"><button class="secondary-action" (click)="flowEditorOpen=false">Cancel</button><button class="primary-action compact" (click)="saveFlow()">Save flow</button></div></section></div>
+  </main>
+
+  <div class="toast" *ngIf="toast() as t" [class.error]="t.status === 'error'" [class.warning]="t.status === 'warning'"><span>{{t.status === 'success' ? '✓' : (t.status === 'warning' ? '~' : '!')}}</span><div><strong>{{t.title}}</strong><small>{{t.detail}}</small></div></div>
+</div>
