@@ -6,11 +6,12 @@ namespace TwinA.ControlServer.Services;
 public sealed class DesktopControlService
 {
     private readonly DesktopV07Client _agent;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly SettingsStore _settings;
 
-    public DesktopControlService(DesktopV07Client agent)
+    public DesktopControlService(DesktopV07Client agent, SettingsStore settings)
     {
         _agent = agent;
+        _settings = settings;
     }
 
     public Task<(bool Ok, string Message, string? Data)> RuntimeAsync(CancellationToken ct)
@@ -100,6 +101,8 @@ public sealed class DesktopControlService
 
     public async Task<CommandResult> InputAsync(DesktopInputRequest request, CancellationToken ct)
     {
+        if (!_settings.Get().Ui.EnableRemoteControl)
+            return CommandResult.Failure("desktop.input", "Remote input is disabled. Enable 'Allow remote screen control' in TWIN A before sending mouse or keyboard input.");
         if (string.IsNullOrWhiteSpace(request.Action))
             return CommandResult.Failure("desktop.input", "A remote input action is required.");
 
