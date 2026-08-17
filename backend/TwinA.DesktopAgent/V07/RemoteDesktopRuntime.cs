@@ -57,6 +57,8 @@ internal static class RemoteDesktopRuntime
             return action switch
             {
                 "move" => Move(payload),
+                "leftdown" => MouseButton(payload, MOUSEEVENTF_LEFTDOWN, "Left mouse button down sent to Windows."),
+                "leftup" => MouseButton(payload, MOUSEEVENTF_LEFTUP, "Left mouse button up sent to Windows."),
                 "leftclick" => Click(payload, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, "Left click sent to Windows."),
                 "doubleclick" => DoubleClick(payload),
                 "rightclick" => Click(payload, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, "Right click sent to Windows."),
@@ -76,6 +78,13 @@ internal static class RemoteDesktopRuntime
     {
         MovePointer(payload);
         return DesktopV07Agent.Ok("Pointer move sent to Windows.");
+    }
+
+    private static DesktopV07Response MouseButton(JsonElement payload, uint flag, string message)
+    {
+        MovePointer(payload);
+        mouse_event(flag, 0, 0, 0, UIntPtr.Zero);
+        return DesktopV07Agent.Ok(message);
     }
 
     private static DesktopV07Response Click(JsonElement payload, uint down, uint up, string message)
@@ -137,7 +146,7 @@ internal static class RemoteDesktopRuntime
                     U = new InputUnion { ki = new KEYBDINPUT { wScan = character, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP } }
                 }
             };
-            if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) != inputs.Length)
+            if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) != (uint)inputs.Length)
                 return DesktopV07Agent.Fail("Windows did not accept all remote text input events.");
         }
         return DesktopV07Agent.Ok("Text input sent to Windows.");
