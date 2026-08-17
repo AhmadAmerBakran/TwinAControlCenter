@@ -1,20 +1,22 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { AfterViewInit, ApplicationRef, Component, ComponentRef, EnvironmentInjector, OnDestroy, OnInit, computed, createComponent, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
-  AppSettings, AudioDevice, ControlService, DevProject, DevStatus, DriveInfo, FileEntry,
+  AppSettings, AudioDevice, ControlService, DesktopRuntime, DevProject, DevStatus, DriveInfo, FileEntry,
   FlowConfig, GameInfo, GameProfile, MqttDevice, MqttDeviceState, SettingsEnvelope, SoundInfo, SystemDetails
 } from './core/control.service';
+import { DesktopControlComponent } from './desktop-control.component';
 
-type Page='home'|'studio'|'audio'|'games'|'system'|'files'|'dev'|'iot'|'automations'|'settings';
+type Page='home'|'studio'|'audio'|'games'|'system'|'desktop'|'files'|'dev'|'iot'|'automations'|'settings';
 interface Toast{title:string;detail:string;status:'success'|'warning'|'error';}
 
 @Component({selector:'ta-root',standalone:true,imports:[CommonModule,FormsModule],templateUrl:'./app.component.html',styleUrl:'./app.component.css'})
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
   readonly page=signal<Page>('home'); readonly toast=signal<Toast|null>(null); readonly commandBusy=signal<string|null>(null); readonly note=signal('');
   readonly activeScene=computed(()=>this.control.snapshot().scene); readonly recordingTime=computed(()=>this.formatTime(this.control.snapshot().recordingSeconds));
   readonly obsReady=computed(()=>this.control.snapshot().obs==='ready'); readonly recordingStateLabel=computed(()=>this.control.snapshot().recording?(this.control.snapshot().recordingPaused?'PAUSED':'RECORDING'):'READY');
-  readonly pages:{id:Page;icon:string;label:string}[]=[{id:'home',icon:'⌂',label:'Home'},{id:'studio',icon:'◉',label:'Studio'},{id:'audio',icon:'◖',label:'Audio'},{id:'games',icon:'◇',label:'Games'},{id:'system',icon:'▣',label:'System'},{id:'files',icon:'▤',label:'Files'},{id:'dev',icon:'⌘',label:'Dev'},{id:'iot',icon:'⌁',label:'IoT'},{id:'automations',icon:'⚡',label:'Flows'},{id:'settings',icon:'⚙',label:'Settings'}];
+  readonly desktopRuntime=signal<DesktopRuntime|null>(null);
+  readonly pages:{id:Page;icon:string;label:string}[]=[{id:'home',icon:'⌂',label:'Home'},{id:'studio',icon:'◉',label:'Studio'},{id:'audio',icon:'◖',label:'Audio'},{id:'games',icon:'◇',label:'Games'},{id:'system',icon:'▣',label:'System'},{id:'desktop',icon:'▦',label:'Desktop'},{id:'files',icon:'▤',label:'Files'},{id:'dev',icon:'⌘',label:'Dev'},{id:'iot',icon:'⌁',label:'IoT'},{id:'automations',icon:'⚡',label:'Flows'},{id:'settings',icon:'⚙',label:'Settings'}];
 
   readonly audioDevices=signal<AudioDevice[]>([]); readonly sounds=signal<SoundInfo[]>([]); soundVolume=80;
   readonly games=signal<GameInfo[]>([]); readonly gameProfiles=signal<GameProfile[]>([]); gameEditorOpen=false; gameDraft:any=this.blankGame(); profileEditorOpen=false; profileGame:GameInfo|null=null; profileDraft:GameProfile=this.blankGameProfile('');
@@ -24,11 +26,40 @@ export class AppComponent implements OnInit {
   readonly flows=signal<FlowConfig[]>([]); flowEditorOpen=false; flowDraft:FlowConfig=this.blankFlow();
   readonly settingsEnvelope=signal<SettingsEnvelope|null>(null); readonly iotStates=signal<MqttDeviceState[]>([]); iotMessage=''; iotDeviceEditorOpen=false; iotDeviceDraft:MqttDevice=this.blankMqttDevice();
 
-  constructor(public readonly control:ControlService){}
-  async ngOnInit():Promise<void>{await this.control.connect();await this.refreshCore();}
-  async go(page:Page):Promise<void>{this.page.set(page);if(page==='audio')await this.refreshAudio();if(page==='games')await this.refreshGames();if(page==='system')await this.refreshSystem();if(page==='files')await this.refreshDrives();if(page==='dev')await this.refreshDev();if(page==='iot'){await this.refreshSettings();await this.refreshIotStates();}if(page==='settings')await this.refreshSettings();if(page==='automations')await this.refreshFlows();}
+  private desktopComponent?:ComponentRef<DesktopControlComponent>;
+  private desktopHost?:HTMLElement;
+  private stateTimer?:number;
+  private gamePollTick=0;
+  private viewReady=false;
+  private readonly homeLayoutListener=():void=>{void this.refreshSettings();};
 
-  async run(command:string,payload:Record<string,unknown>={},success='Command completed'):Promise<void>{this.commandBusy.set(command);try{const r=await this.control.execute(command,payload);this.showToast(r.ok?(r.verified?success:'Executed • state unverified'):'Command failed',r.message,r.ok?(r.verified?'success':'warning'):'error');if(r.data&&(command==='dev.execute'||command==='flow.run'))this.devOutput=r.data;await this.afterCommand(command);}catch(e){this.showToast('Command failed',e instanceof Error?e.message:'Unknown error','error');}finally{this.commandBusy.set(null);}}
+  constructor(public readonly control:ControlService,private readonly appRef:ApplicationRef,private readonly injector:EnvironmentInjector){}
+
+  async ngOnInit():Promise<void>{
+    await this.control.connect();
+    await this.refreshCore();
+    await this.refreshDesktopRuntime();
+    this.stateTimer=window.setInterval(()=>void this.refreshRealStates(),1600);
+    window.addEventListener('twina-home-layout-changed',this.homeLayoutListener);
+  }
+
+  ngAfterViewInit():void{this.viewReady=true;this.applyHomeLayout();this.syncHomeIndicators();}
+
+  ngOnDestroy():void{
+    if(this.stateTimer)window.clearInterval(this.stateTimer);
+    window.removeEventListener('twina-home-layout-changed',this.homeLayoutListener);
+    this.unmountDesktop();
+  }
+
+  async go(page:Page):Promise<void>{
+    if(page!=='desktop')this.unmountDesktop();
+    this.page.set(page);
+    if(page==='desktop'){queueMicrotask(()=>this.mountDesktop());return;}
+    if(page==='audio')await this.refreshAudio();if(page==='games')await this.refreshGames();if(page==='system')await this.refreshSystem();if(page==='files')await this.refreshDrives();if(page==='dev')await this.refreshDev();if(page==='iot'){await this.refreshSettings();await this.refreshIotStates();}if(page==='settings')await this.refreshSettings();if(page==='automations')await this.refreshFlows();
+    queueMicrotask(()=>{this.applyHomeLayout();this.syncHomeIndicators();});
+  }
+
+  async run(command:string,payload:Record<string,unknown>={},success='Command completed'):Promise<void>{this.commandBusy.set(command);try{const r=await this.control.execute(command,payload);this.showToast(r.ok?(r.verified?success:'Executed • state unverified'):'Command failed',r.message,r.ok?(r.verified?'success':'warning'):'error');if(r.data&&(command==='dev.execute'||command==='flow.run'))this.devOutput=r.data;await this.afterCommand(command);await this.refreshDesktopRuntime();this.syncHomeIndicators();window.setTimeout(()=>this.syncHomeIndicators(),450);}catch(e){this.showToast('Command failed',e instanceof Error?e.message:'Unknown error','error');}finally{this.commandBusy.set(null);}}
   async mark(kind:string):Promise<void>{await this.run('session.marker.add',{kind,note:this.note()},`${kind} marker saved`);this.note.set('');}
   async holdDanger(command:string,label:string):Promise<void>{const confirmPower=this.settingsEnvelope()?.settings.ui.confirmPowerActions??true;if(!confirmPower||window.confirm(`${label}? This action requires confirmation.`))await this.run(command,{},`${label} requested`);}
   isBusy(command:string):boolean{return this.commandBusy()===command;} setNote(value:string):void{this.note.set(value);}
@@ -90,7 +121,7 @@ export class AppComponent implements OnInit {
   async deleteFlow(flow:FlowConfig):Promise<void>{if(!confirm(`Delete flow '${flow.name}'?`))return;await this.control.delete(`/api/flows/${flow.id}`);await this.refreshFlows();}
 
   // SETTINGS + IOT
-  async refreshSettings():Promise<void>{try{this.settingsEnvelope.set(await this.control.get<SettingsEnvelope>('/api/settings'));}catch(e){this.showToast('Settings failed',this.err(e),'error');}}
+  async refreshSettings():Promise<void>{try{this.settingsEnvelope.set(await this.control.get<SettingsEnvelope>('/api/settings'));this.applyHomeLayout();}catch(e){this.showToast('Settings failed',this.err(e),'error');}}
   async saveSettings():Promise<void>{const env=this.settingsEnvelope();if(!env)return;try{await this.control.put('/api/settings',env.settings);await this.refreshSettings();this.showToast('Settings saved',`Configuration written to ${this.settingsEnvelope()?.configPath}`,'success');}catch(e){this.showToast('Settings save failed',this.err(e),'error');}}
   async testIot():Promise<void>{try{const r:any=await this.control.post('/api/iot/test',{});this.iotMessage=r.message;this.showToast(r.verified?'MQTT verified':'MQTT connected',r.message,r.verified?'success':'warning');await this.refreshIotStates();}catch(e){this.iotMessage=this.err(e);this.showToast('MQTT connection failed',this.iotMessage,'error');}}
   async refreshIotStates():Promise<void>{try{this.iotStates.set(await this.control.get<MqttDeviceState[]>('/api/iot/states'));}catch{this.iotStates.set([]);}}
@@ -100,7 +131,7 @@ export class AppComponent implements OnInit {
   async deleteIotDevice(device:MqttDevice):Promise<void>{if(!confirm(`Remove IoT device '${device.name}'?`))return;const env=this.settingsEnvelope();if(!env)return;env.settings.mqtt.devices=env.settings.mqtt.devices.filter(d=>d.id!==device.id);await this.saveSettings();await this.refreshIotStates();}
   async toggleIotDevice(device:MqttDevice,on:boolean):Promise<void>{await this.run('iot.toggle',{id:device.id,on},`${device.name} ${on?'ON':'OFF'}`);await this.refreshIotStates();}
   setMqtt(field:'enabled'|'host'|'port'|'tls'|'username',value:any):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.mqtt as any)[field]=field==='port'?Number(value):value;this.settingsEnvelope.set({...env,settings:{...env.settings,mqtt:{...env.settings.mqtt}}});}
-  setUi(field:'confirmPowerActions'|'protectSystemPaths',value:boolean):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.ui as any)[field]=value;this.settingsEnvelope.set({...env,settings:{...env.settings,ui:{...env.settings.ui}}});}
+  setUi(field:'confirmPowerActions'|'protectSystemPaths'|'enableRemoteControl',value:boolean):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.ui as any)[field]=value;this.settingsEnvelope.set({...env,settings:{...env.settings,ui:{...env.settings.ui}}});}
 
   sourceIcon(name:string):string{const v=name.toLowerCase();if(v.includes('mic'))return'🎙';if(v.includes('desktop'))return'◖';if(v.includes('game'))return'◇';return'◉';}
   formatDb(value:number):string{if(!Number.isFinite(value))return'—';const r=Math.round(value*10)/10;return`${r>0?'+':''}${r.toFixed(1)} dB`;}
@@ -109,6 +140,62 @@ export class AppComponent implements OnInit {
 
   private async refreshCore():Promise<void>{await Promise.allSettled([this.refreshSettings(),this.refreshSystem()]);}
   private async afterCommand(command:string):Promise<void>{if(command.startsWith('audio.')||command.startsWith('sound.'))await this.refreshAudio();if(command.startsWith('game.'))await this.refreshGames();if(command.startsWith('files.'))await this.refreshDrives();if(command.startsWith('dev.'))await this.refreshDev();if(command.startsWith('iot.'))await this.refreshIotStates();}
+
+  private async refreshRealStates():Promise<void>{
+    await this.refreshDesktopRuntime();
+    this.syncHomeIndicators();
+    this.gamePollTick++;
+    if(this.page()==='games'&&this.gamePollTick%3===0)await this.refreshGamesQuiet();
+    if(this.page()==='audio'&&this.gamePollTick%3===0)await this.refreshAudioQuiet();
+  }
+
+  private async refreshDesktopRuntime():Promise<void>{try{this.desktopRuntime.set(await this.control.get<DesktopRuntime>('/api/desktop/runtime'));}catch{this.desktopRuntime.set(null);}}
+  private async refreshGamesQuiet():Promise<void>{try{const [games,profiles]=await Promise.all([this.control.get<GameInfo[]>('/api/games'),this.control.get<GameProfile[]>('/api/games/profiles')]);this.games.set(games);this.gameProfiles.set(profiles);}catch{}}
+  private async refreshAudioQuiet():Promise<void>{try{const devices=await this.control.get<AudioDevice[]>('/api/audio/devices');this.audioDevices.set(devices);}catch{}}
+
+  private mountDesktop():void{
+    if(!this.viewReady||this.desktopComponent||this.page()!=='desktop')return;
+    const workspace=document.querySelector('.workspace');if(!workspace)return;
+    const host=document.createElement('section');host.className='page desktop-dynamic-host';
+    const component=createComponent(DesktopControlComponent,{hostElement:host,environmentInjector:this.injector});
+    this.appRef.attachView(component.hostView);workspace.appendChild(host);this.desktopComponent=component;this.desktopHost=host;
+  }
+
+  private unmountDesktop():void{
+    if(this.desktopComponent){this.appRef.detachView(this.desktopComponent.hostView);this.desktopComponent.destroy();this.desktopComponent=undefined;}
+    this.desktopHost?.remove();this.desktopHost=undefined;
+  }
+
+  private applyHomeLayout():void{
+    if(!this.viewReady)return;
+    const cards=this.settingsEnvelope()?.settings.ui.homeCards??[];
+    const metricKeys=['cpu','gpu','ram','gpuTemp'];const actionKeys=['record','replay','mark','screenshot','steam','discord'];
+    const apply=(selector:string,keys:string[]):void=>{
+      const elements=Array.from(document.querySelectorAll<HTMLElement>(selector));
+      elements.forEach((element,index)=>{
+        const key=keys[index];const pref=cards.find(c=>c.key===key);
+        element.style.display=pref?.visible===false?'none':'';
+        element.style.order=String(pref?.order??((index+1)*10));
+        element.style.gridColumn=pref?.size==='wide'?'span 2':'';
+      });
+    };
+    apply('.metric-grid:not(.system-metrics) > .metric',metricKeys);
+    apply('.page:first-of-type .action-grid > .action-card',actionKeys);
+  }
+
+  private syncHomeIndicators():void{
+    if(!this.viewReady)return;
+    const runtime=this.desktopRuntime();const snap=this.control.snapshot();
+    const toggle=(selector:string,on:boolean):void=>document.querySelector<HTMLElement>(selector)?.classList.toggle('actual-active',on);
+    toggle('.hero-actions .primary-action',snap.recording);
+    toggle('.hero-actions .secondary-action',runtime?.obsRunning===true);
+    toggle('.page:first-of-type .action-grid > .action-card:nth-child(1)',snap.recording);
+    toggle('.page:first-of-type .action-grid > .action-card:nth-child(2)',snap.replayBuffer);
+    toggle('.page:first-of-type .action-grid > .action-card:nth-child(5)',runtime?.steamRunning===true);
+    // Discord deafen cannot be read back reliably, so TWIN A intentionally does not leave that toggle highlighted.
+    toggle('.page:first-of-type .action-grid > .action-card:nth-child(6)',false);
+  }
+
   private showToast(title:string,detail:string,status:'success'|'warning'|'error'):void{this.toast.set({title,detail,status});window.setTimeout(()=>this.toast.set(null),3600);}
   private err(e:unknown):string{const any=e as any;return any?.error?.message||any?.error?.detail||any?.message||'Unknown error';}
   private formatTime(seconds:number):string{const h=Math.floor(seconds/3600).toString().padStart(2,'0');const m=Math.floor((seconds%3600)/60).toString().padStart(2,'0');const s=Math.floor(seconds%60).toString().padStart(2,'0');return`${h}:${m}:${s}`;}
