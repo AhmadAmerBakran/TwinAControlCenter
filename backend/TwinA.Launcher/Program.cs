@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -19,6 +21,7 @@ internal static class Program
         if (!firstInstance)
         {
             if (args.Any(a => a.Equals("--open", StringComparison.OrdinalIgnoreCase))) OpenDashboard();
+            if (args.Any(a => a.Equals("--setup", StringComparison.OrdinalIgnoreCase))) OpenTailscale();
             return;
         }
 
@@ -26,7 +29,9 @@ internal static class Program
         StartServices();
         CreateTrayIcon();
 
-        if (args.Any(a => a.Equals("--open", StringComparison.OrdinalIgnoreCase)))
+        if (args.Any(a => a.Equals("--setup", StringComparison.OrdinalIgnoreCase)))
+            _ = ConfigureIpadAccessAsync();
+        else if (args.Any(a => a.Equals("--open", StringComparison.OrdinalIgnoreCase)))
             _ = OpenDashboardWhenReadyAsync();
 
         Application.ApplicationExit += (_, _) => StopServices();
@@ -82,6 +87,7 @@ internal static class Program
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open TWIN A", null, (_, _) => OpenDashboard());
+        menu.Items.Add("Configure iPad Access", null, (_, _) => _ = ConfigureIpadAccessAsync());
         menu.Items.Add("Open Tailscale", null, (_, _) => OpenTailscale());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Restart TWIN A", null, (_, _) => RestartServices());
@@ -127,27 +133,162 @@ internal static class Program
 
     private static void OpenDashboard()
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo { FileName = DashboardUri.ToString(), UseShellExecute = true });
-        }
+        try { Process.Start(new ProcessStartInfo { FileName = DashboardUri.ToString(), UseShellExecute = true }); }
         catch { }
     }
 
-    private static void OpenTailscale()
+    private static string? TailscaleCliPath()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Tailscale", "tailscale.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Tailscale", "tailscale.exe")
+        };
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static string? TailscaleGuiPath()
     {
         var candidates = new[]
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Tailscale", "tailscale-ipn.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Tailscale", "tailscale.exe")
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Tailscale", "tailscale-ipn.exe")
         };
-        var executable = candidates.FirstOrDefault(File.Exists);
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static void OpenTailscale()
+    {
+        var executable = TailscaleGuiPath() ?? TailscaleCliPath();
         if (executable is null)
         {
-            MessageBox.Show("Tailscale is not installed. Run the TWIN A installer again and select Tailscale, or install it from tailscale.com.", "TWIN A Control Center", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                "Tailscale is not installed. Run the TWIN A installer again and select Tailscale, or install it from tailscale.com.",
+                "TWIN A Control Center",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
             return;
         }
         try { Process.Start(new ProcessStartInfo { FileName = executable, UseShellExecute = true }); } catch { }
+    }
+
+    private static async Task ConfigureIpadAccessAsync()
+    {
+        var tailscale = TailscaleCliPath();
+        if (tailscale is null)
+        {
+            MessageBox.Show(
+                "Tailscale is required for the easiest private iPad connection. Re-run the TWIN A installer and select Tailscale, then choose 'Configure iPad Access' from the TWIN A tray icon.",
+                "TWIN A — iPad Setup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            await OpenDashboardWhenReadyAsync();
+            return;
+        }
+
+        var online = await IsTailscaleOnlineAsync(tailscale);
+        while (!online)
+        {
+            OpenTailscale();
+            var choice = MessageBox.Show(
+                "Tailscale is installed but is not connected yet.\n\n1. Sign in to Tailscale on this PC.\n2. Wait until Tailscale says Connected.\n3. Click Retry here.\n\nUse the same Tailscale account on the iPad.",
+                "TWIN A — Connect Tailscale",
+                MessageBoxButtons.RetryCancel,
+                MessageBoxIcon.Information);
+            if (choice != DialogResult.Retry)
+            {
+                await OpenDashboardWhenReadyAsync();
+                return;
+            }
+            online = await IsTailscaleOnlineAsync(tailscale);
+        }
+
+        var serve = await RunProcessAsync(tailscale, "serve --bg 5055");
+        var status = await RunProcessAsync(tailscale, "serve status");
+        var combined = serve.Output + "\n" + status.Output;
+        var match = Regex.Match(combined, @"https://[A-Za-z0-9.-]+\.ts\.net(?::\d+)?", RegexOptions.IgnoreCase);
+        var url = match.Success ? match.Value : string.Empty;
+
+        if (serve.ExitCode != 0 && !status.Output.Contains("127.0.0.1:5055", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "Tailscale is connected, but TWIN A could not automatically configure Tailscale Serve.\n\nOpen the TWIN A README from the Start menu for the manual Tailscale Serve step.",
+                "TWIN A — iPad Setup",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            await OpenDashboardWhenReadyAsync();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            try { Clipboard.SetText(url); } catch { }
+            var open = MessageBox.Show(
+                $"Private iPad access is ready.\n\nAddress:\n{url}\n\nThe address has been copied to the clipboard.\n\nOn the iPad:\n1. Install Tailscale.\n2. Sign in to the same Tailscale account.\n3. Open this address in Safari.\n4. Share → Add to Home Screen.\n\nOpen the private address on this PC now?",
+                "TWIN A — iPad Access Ready",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+            if (open == DialogResult.Yes)
+            {
+                try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); } catch { }
+            }
+        }
+        else
+        {
+            MessageBox.Show(
+                "Tailscale Serve is configured for TWIN A. Open the Tailscale Serve status from the README if you need to find the private .ts.net address.",
+                "TWIN A — iPad Access Ready",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        await OpenDashboardWhenReadyAsync();
+    }
+
+    private static async Task<bool> IsTailscaleOnlineAsync(string tailscale)
+    {
+        var result = await RunProcessAsync(tailscale, "status --json");
+        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(result.Output);
+            var root = document.RootElement;
+            if (root.TryGetProperty("BackendState", out var backend) && backend.GetString()?.Equals("Running", StringComparison.OrdinalIgnoreCase) == true)
+                return true;
+            if (root.TryGetProperty("Self", out var self) && self.TryGetProperty("Online", out var online) && online.ValueKind == JsonValueKind.True)
+                return true;
+        }
+        catch { }
+        return false;
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunProcessAsync(string executable, string arguments)
+    {
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var output = (await stdout) + "\n" + (await stderr);
+            return (process.ExitCode, output.Trim());
+        }
+        catch (Exception ex)
+        {
+            return (-1, ex.Message);
+        }
     }
 
     private static void RestartServices()
