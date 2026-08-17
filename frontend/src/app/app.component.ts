@@ -186,7 +186,9 @@ export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
   private syncHomeIndicators():void{
     if(!this.viewReady)return;
     const runtime=this.desktopRuntime();const snap=this.control.snapshot();
-    const toggle=(selector:string,on:boolean):void=>document.querySelector<HTMLElement>(selector)?.classList.toggle('actual-active',on);
+    const toggle=(selector:string,on:boolean):void=>{
+      document.querySelector<HTMLElement>(selector)?.classList.toggle('actual-active',on);
+    };
     toggle('.hero-actions .primary-action',snap.recording);
     toggle('.hero-actions .secondary-action',runtime?.obsRunning===true);
     toggle('.page:first-of-type .action-grid > .action-card:nth-child(1)',snap.recording);
