@@ -15,8 +15,9 @@ import {
 type DesktopTab='windows'|'tasks'|'mixer'|'remote'|'layout';
 type FeedbackState='success'|'warning'|'error';
 type StreamPreset='max'|'balanced'|'quality';
+type TwoFingerGesture='none'|'pending'|'pinch'|'scroll';
 interface DesktopMonitor{ id:string;name:string;left:number;top:number;width:number;height:number;primary:boolean;screenCount:number; }
-interface PointerPoint{ x:number;y:number;startX:number;startY:number;startedAt:number; }
+interface PointerPoint{ x:number;y:number;startX:number;startY:number;clientX:number;clientY:number;startClientX:number;startClientY:number;startedAt:number; }
 
 @Component({
   selector:'ta-desktop-control',
@@ -43,6 +44,7 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   readonly streamHeight=signal(0);
   readonly remoteZoom=signal(1);
   readonly remoteExpanded=signal(false);
+  readonly zoomToolsVisible=signal(false);
 
   tab:DesktopTab='windows';
   windowFilter='';
@@ -71,6 +73,9 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   private pinchStartDistance=0;
   private pinchStartZoom=1;
   private twoFingerLastY=0;
+  private twoFingerStartCenterY=0;
+  private twoFingerGesture:TwoFingerGesture='none';
+  private zoomHideTimer?:number;
 
   constructor(private readonly control:ControlService){}
 
@@ -161,11 +166,12 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     }catch(e){this.fail('Remote-control setting failed',e);await this.refreshSettings();}
   }
 
-  changeMonitor():void{this.resetZoom();this.startStream();}
+  changeMonitor():void{this.resetZoom(false);this.startStream();}
   changePreset():void{this.startStream();}
-  resetZoom():void{this.remoteZoom.set(1);}
-  zoomIn():void{this.remoteZoom.set(Math.min(3,Math.round((this.remoteZoom()+0.25)*100)/100));}
-  zoomOut():void{this.remoteZoom.set(Math.max(1,Math.round((this.remoteZoom()-0.25)*100)/100));}
+  resetZoom(show=true):void{this.remoteZoom.set(1);if(show)this.showZoomTools();}
+  zoomIn():void{this.remoteZoom.set(Math.min(3,Math.round((this.remoteZoom()+0.25)*100)/100));this.showZoomTools();}
+  zoomOut():void{this.remoteZoom.set(Math.max(1,Math.round((this.remoteZoom()-0.25)*100)/100));this.showZoomTools();}
+  toggleZoomTools():void{this.zoomToolsVisible()?this.hideZoomTools():this.showZoomTools(3000);}
 
   toggleExpanded():void{
     const next=!this.remoteExpanded();
@@ -181,30 +187,33 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   selectedMonitor():DesktopMonitor|undefined{return this.monitors().find(m=>m.id===this.remoteMonitor);}
 
   remotePointerDown(event:PointerEvent):void{
-    if(!this.remoteControlEnabled())return;
     event.preventDefault();
     const canvas=event.currentTarget as HTMLElement;
     canvas.setPointerCapture?.(event.pointerId);
     const pos=this.pointerPosition(event);
-    this.pointers.set(event.pointerId,{...pos,startX:pos.x,startY:pos.y,startedAt:performance.now()});
+    this.pointers.set(event.pointerId,{...pos,startX:pos.x,startY:pos.y,clientX:event.clientX,clientY:event.clientY,startClientX:event.clientX,startClientY:event.clientY,startedAt:performance.now()});
 
     if(this.pointers.size===1){
       this.longPressTriggered=false;
       this.dragStart=pos;
-      if(this.longPressTimer)window.clearTimeout(this.longPressTimer);
-      this.longPressTimer=window.setTimeout(()=>{
-        const point=this.pointers.get(event.pointerId);
-        if(!point||this.dragging||this.pointers.size!==1)return;
-        this.longPressTriggered=true;
-        void this.sendInput({action:'rightclick',...this.pointerCoordinates(point.x,point.y)},false);
-      },520);
+      if(this.remoteControlEnabled()){
+        if(this.longPressTimer)window.clearTimeout(this.longPressTimer);
+        this.longPressTimer=window.setTimeout(()=>{
+          const point=this.pointers.get(event.pointerId);
+          if(!point||this.dragging||this.pointers.size!==1||!this.remoteControlEnabled())return;
+          this.longPressTriggered=true;
+          void this.sendInput({action:'rightclick',...this.pointerCoordinates(point.x,point.y)},false);
+        },520);
+      }
     }else if(this.pointers.size===2){
       this.cancelLongPress();
-      const pair=[...this.pointers.values()];
-      this.pinchStartDistance=this.distance(pair[0],pair[1]);
+      const pair=[...this.pointers.values()].slice(0,2);
+      this.pinchStartDistance=this.pixelDistance(pair[0],pair[1]);
       this.pinchStartZoom=this.remoteZoom();
-      this.twoFingerLastY=(pair[0].y+pair[1].y)/2;
-      if(this.dragging){
+      this.twoFingerLastY=(pair[0].clientY+pair[1].clientY)/2;
+      this.twoFingerStartCenterY=this.twoFingerLastY;
+      this.twoFingerGesture='pending';
+      if(this.dragging&&this.remoteControlEnabled()){
         this.dragging=false;
         const p=pair[0];
         void this.sendInput({action:'leftup',...this.pointerCoordinates(p.x,p.y)},false);
@@ -213,32 +222,47 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   }
 
   remotePointerMove(event:PointerEvent):void{
-    if(!this.remoteControlEnabled())return;
     const point=this.pointers.get(event.pointerId);if(!point)return;
     event.preventDefault();
-    const pos=this.pointerPosition(event);point.x=pos.x;point.y=pos.y;
+    const pos=this.pointerPosition(event);point.x=pos.x;point.y=pos.y;point.clientX=event.clientX;point.clientY=event.clientY;
 
     if(this.pointers.size>=2){
       this.cancelLongPress();
       const pair=[...this.pointers.values()].slice(0,2);
-      const distance=this.distance(pair[0],pair[1]);
-      if(this.pinchStartDistance>0){
-        const zoom=Math.max(1,Math.min(3,this.pinchStartZoom*(distance/this.pinchStartDistance)));
-        this.remoteZoom.set(Math.round(zoom*100)/100);
+      const distance=this.pixelDistance(pair[0],pair[1]);
+      const centerY=(pair[0].clientY+pair[1].clientY)/2;
+      const distanceRatio=this.pinchStartDistance>0?distance/this.pinchStartDistance:1;
+      const pinchDelta=Math.abs(distanceRatio-1);
+      const centerTravel=Math.abs(centerY-this.twoFingerStartCenterY);
+
+      if(this.twoFingerGesture==='pending'){
+        if(pinchDelta>=0.035)this.twoFingerGesture='pinch';
+        else if(centerTravel>=18)this.twoFingerGesture='scroll';
       }
-      const centerY=(pair[0].y+pair[1].y)/2;
-      const dy=centerY-this.twoFingerLastY;
-      if(Math.abs(dy)>8){
-        this.twoFingerLastY=centerY;
-        const centerX=(pair[0].x+pair[1].x)/2;
-        void this.sendInput({action:'wheel',delta:dy>0?120:-120,...this.pointerCoordinates(centerX,centerY)},false);
+
+      if(this.twoFingerGesture==='pinch'){
+        const zoom=Math.max(1,Math.min(3,this.pinchStartZoom*distanceRatio));
+        this.remoteZoom.set(Math.round(zoom*100)/100);
+        this.showZoomTools();
+        return;
+      }
+
+      if(this.twoFingerGesture==='scroll'&&this.remoteControlEnabled()){
+        const dy=centerY-this.twoFingerLastY;
+        if(Math.abs(dy)>10){
+          this.twoFingerLastY=centerY;
+          const centerX=(pair[0].x+pair[1].x)/2;
+          const normalizedY=(pair[0].y+pair[1].y)/2;
+          void this.sendInput({action:'wheel',delta:dy>0?120:-120,...this.pointerCoordinates(centerX,normalizedY)},false);
+        }
       }
       return;
     }
 
-    const moved=Math.hypot(point.x-point.startX,point.y-point.startY);
-    if(moved>0.012)this.cancelLongPress();
-    if(moved>0.012&&!this.dragging){
+    if(!this.remoteControlEnabled())return;
+    const moved=Math.hypot(point.clientX-point.startClientX,point.clientY-point.startClientY);
+    if(moved>10)this.cancelLongPress();
+    if(moved>10&&!this.dragging){
       this.dragging=true;
       const start=this.dragStart??{x:point.startX,y:point.startY};
       void this.sendInput({action:'leftdown',...this.pointerCoordinates(start.x,start.y)},false);
@@ -257,11 +281,16 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     this.cancelLongPress();
 
     if(wasMulti){
-      this.pinchStartDistance=0;
-      this.twoFingerLastY=0;
+      if(this.pointers.size<2){
+        this.pinchStartDistance=0;
+        this.twoFingerLastY=0;
+        this.twoFingerStartCenterY=0;
+        this.twoFingerGesture='none';
+      }
       return;
     }
 
+    if(!this.remoteControlEnabled())return;
     const coords=this.pointerCoordinates(point.x,point.y);
     if(this.dragging){
       this.dragging=false;
@@ -289,7 +318,8 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   remotePointerCancel(event:PointerEvent):void{
     const point=this.pointers.get(event.pointerId);
     this.pointers.delete(event.pointerId);this.cancelLongPress();
-    if(this.dragging&&point){this.dragging=false;void this.sendInput({action:'leftup',...this.pointerCoordinates(point.x,point.y)},false);}
+    if(this.pointers.size<2){this.twoFingerGesture='none';this.pinchStartDistance=0;}
+    if(this.dragging&&point&&this.remoteControlEnabled()){this.dragging=false;void this.sendInput({action:'leftup',...this.pointerCoordinates(point.x,point.y)},false);}
   }
 
   remoteContextMenu(event:MouseEvent):void{
@@ -436,9 +466,15 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   }
 
   private pointerCoordinates(x:number,y:number):{x:number;y:number;monitorId:string}{return{x,y,monitorId:this.remoteMonitor};}
-  private distance(a:{x:number;y:number},b:{x:number;y:number}):number{return Math.hypot(a.x-b.x,a.y-b.y);}
+  private pixelDistance(a:PointerPoint,b:PointerPoint):number{return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
   private cancelLongPress():void{if(this.longPressTimer)window.clearTimeout(this.longPressTimer);this.longPressTimer=undefined;}
-  private clearGestureTimers():void{this.cancelLongPress();if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);this.singleTapTimer=undefined;}
+  private showZoomTools(duration=1600):void{
+    this.zoomToolsVisible.set(true);
+    if(this.zoomHideTimer)window.clearTimeout(this.zoomHideTimer);
+    this.zoomHideTimer=window.setTimeout(()=>this.zoomToolsVisible.set(false),duration);
+  }
+  private hideZoomTools():void{if(this.zoomHideTimer)window.clearTimeout(this.zoomHideTimer);this.zoomHideTimer=undefined;this.zoomToolsVisible.set(false);}
+  private clearGestureTimers():void{this.cancelLongPress();this.hideZoomTools();if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);this.singleTapTimer=undefined;}
 
   private async sendInput(payload:Record<string,unknown>,showFeedback:boolean):Promise<void>{
     if(!this.remoteControlEnabled()){if(showFeedback)this.notice('View-only mode','Enable remote screen control before sending input.','warning');return;}
