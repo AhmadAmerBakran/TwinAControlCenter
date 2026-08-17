@@ -3,30 +3,18 @@
     <div>
       <span class="eyebrow">WINDOWS CONTROL</span>
       <h1>Desktop</h1>
-      <p>Live Windows state, app audio, task control and private remote screen.</p>
+      <p>Live Windows state, app audio, task control and high-refresh private remote desktop.</p>
     </div>
     <button class="refresh" type="button" (click)="refreshEverything()" [disabled]="loading()">{{loading()?'REFRESHING…':'REFRESH'}}</button>
   </header>
 
   <div class="runtime-strip">
-    <article [class.live]="runtime()?.obsRunning">
-      <span>OBS</span><strong>{{runtime()?.obsRunning?'RUNNING':'OFF'}}</strong>
-    </article>
-    <article [class.live]="runtime()?.steamRunning">
-      <span>STEAM</span><strong>{{runtime()?.steamRunning?'RUNNING':'OFF'}}</strong>
-    </article>
-    <article [class.live]="runtime()?.discordRunning">
-      <span>DISCORD</span><strong>{{runtime()?.discordRunning?'RUNNING':'OFF'}}</strong>
-    </article>
-    <article class="foreground">
-      <span>FOREGROUND</span><strong>{{runtime()?.foregroundProcess||'—'}}</strong><small>{{runtime()?.foregroundTitle||'No active title'}}</small>
-    </article>
-    <article>
-      <span>WINDOWS</span><strong>{{runtime()?.windowCount??0}}</strong>
-    </article>
-    <article>
-      <span>PROCESSES</span><strong>{{runtime()?.processCount??0}}</strong>
-    </article>
+    <article [class.live]="runtime()?.obsRunning"><span>OBS</span><strong>{{runtime()?.obsRunning?'RUNNING':'OFF'}}</strong></article>
+    <article [class.live]="runtime()?.steamRunning"><span>STEAM</span><strong>{{runtime()?.steamRunning?'RUNNING':'OFF'}}</strong></article>
+    <article [class.live]="runtime()?.discordRunning"><span>DISCORD</span><strong>{{runtime()?.discordRunning?'RUNNING':'OFF'}}</strong></article>
+    <article class="foreground"><span>FOREGROUND</span><strong>{{runtime()?.foregroundProcess||'—'}}</strong><small>{{runtime()?.foregroundTitle||'No active title'}}</small></article>
+    <article><span>WINDOWS</span><strong>{{runtime()?.windowCount??0}}</strong></article>
+    <article><span>PROCESSES</span><strong>{{runtime()?.processCount??0}}</strong></article>
   </div>
 
   <nav class="desktop-tabs" aria-label="Desktop controls">
@@ -39,17 +27,11 @@
 
   @if(tab==='windows'){
     <section class="panel">
-      <div class="panel-head">
-        <div><span class="eyebrow">REAL TOP-LEVEL WINDOWS</span><h2>Window Manager</h2></div>
-        <input class="search" [(ngModel)]="windowFilter" placeholder="Search windows or process…" />
-      </div>
+      <div class="panel-head"><div><span class="eyebrow">REAL TOP-LEVEL WINDOWS</span><h2>Window Manager</h2></div><input class="search" [(ngModel)]="windowFilter" placeholder="Search windows or process…" /></div>
       <div class="window-list">
         @for(item of filteredWindows();track item.handle){
           <article class="window-row" [class.foreground-window]="item.foreground">
-            <div class="window-main">
-              <span class="app-icon">▦</span>
-              <div><strong>{{item.title}}</strong><small>{{item.processName}} · PID {{item.pid}}</small></div>
-            </div>
+            <div class="window-main"><span class="app-icon">▦</span><div><strong>{{item.title}}</strong><small>{{item.processName}} · PID {{item.pid}}</small></div></div>
             <span class="state-pill" [class.on]="item.foreground">{{windowState(item)}}</span>
             <div class="window-actions">
               <button type="button" [class.actual]="item.foreground" (click)="windowAction(item,'focus')">FOCUS</button>
@@ -59,42 +41,31 @@
               <button type="button" class="danger" (click)="windowAction(item,'close')">CLOSE</button>
             </div>
           </article>
-        }@empty{
-          <div class="empty">No visible windows matched the current filter.</div>
-        }
+        }@empty{<div class="empty">No visible windows matched the current filter.</div>}
       </div>
     </section>
   }
 
   @if(tab==='tasks'){
     <section class="panel">
-      <div class="panel-head">
-        <div><span class="eyebrow">LIVE PROCESS TABLE</span><h2>Task Manager</h2></div>
-        <input class="search" [(ngModel)]="processFilter" placeholder="Search process, title or PID…" />
-      </div>
+      <div class="panel-head"><div><span class="eyebrow">LIVE PROCESS TABLE</span><h2>Task Manager</h2></div><input class="search" [(ngModel)]="processFilter" placeholder="Search process, title or PID…" /></div>
       <div class="task-table">
         <div class="task-head"><span>PROCESS</span><span>PID</span><span>MEMORY</span><span>STATE</span><span></span></div>
         @for(item of filteredProcesses();track item.pid){
           <div class="task-row" [class.protected]="item.protected">
             <div><strong>{{item.name}}</strong><small>{{item.windowTitle||'Background process'}}</small></div>
-            <span>{{item.pid}}</span>
-            <span>{{formatBytes(item.memoryBytes)}}</span>
+            <span>{{item.pid}}</span><span>{{formatBytes(item.memoryBytes)}}</span>
             <span class="state-pill" [class.on]="item.responding">{{item.protected?'PROTECTED':(item.responding?'RUNNING':'NOT RESPONDING')}}</span>
             <button type="button" class="danger" [disabled]="item.protected" (click)="endProcess(item)">{{item.protected?'LOCKED':'END TASK'}}</button>
           </div>
-        }@empty{
-          <div class="empty">No running processes matched the current filter.</div>
-        }
+        }@empty{<div class="empty">No running processes matched the current filter.</div>}
       </div>
     </section>
   }
 
   @if(tab==='mixer'){
     <section class="panel">
-      <div class="panel-head">
-        <div><span class="eyebrow">WINDOWS CORE AUDIO</span><h2>Per-App Mixer</h2></div>
-        <span class="hint">Values are read back from the current default output device.</span>
-      </div>
+      <div class="panel-head"><div><span class="eyebrow">WINDOWS CORE AUDIO</span><h2>Per-App Mixer</h2></div><span class="hint">Values are read back from the current default output device.</span></div>
       <div class="mixer-grid">
         @for(item of audioSessions();track item.pid){
           <article class="mixer-card" [class.muted]="item.muted">
@@ -103,73 +74,88 @@
             <input type="range" min="0" max="100" step="1" [value]="item.volume" (change)="setSessionVolume(item,$event)" [attr.aria-label]="item.processName+' volume'" />
             <button type="button" class="mute-button" [class.actual]="item.muted" (click)="toggleSessionMute(item)">{{item.muted?'UNMUTE':'MUTE'}}</button>
           </article>
-        }@empty{
-          <div class="empty">No active per-application audio sessions are currently exposed by Windows.</div>
-        }
+        }@empty{<div class="empty">No active per-application audio sessions are currently exposed by Windows.</div>}
       </div>
     </section>
   }
 
   @if(tab==='remote'){
-    <section class="panel remote-panel">
+    <section class="panel remote-panel" [class.remote-expanded]="remoteExpanded()">
       <div class="panel-head remote-head">
-        <div><span class="eyebrow">PRIVATE DESKTOP VIEW</span><h2>Remote Screen</h2></div>
-        <label class="control-switch" [class.enabled]="remoteControlEnabled()">
-          <input type="checkbox" [checked]="remoteControlEnabled()" (change)="changeRemoteControl($any($event.target).checked)" />
-          <span></span>
-          {{remoteControlEnabled()?'CONTROL ENABLED':'VIEW ONLY'}}
-        </label>
+        <div><span class="eyebrow">BINARY WEBSOCKET STREAM</span><h2>Remote Screen</h2></div>
+        <div class="remote-head-actions">
+          <button type="button" class="secondary" (click)="toggleExpanded()">{{remoteExpanded()?'EXIT FULL VIEW':'FULL VIEW'}}</button>
+          <label class="control-switch" [class.enabled]="remoteControlEnabled()">
+            <input type="checkbox" [checked]="remoteControlEnabled()" (change)="changeRemoteControl($any($event.target).checked)" />
+            <span></span>{{remoteControlEnabled()?'CONTROL ENABLED':'VIEW ONLY'}}
+          </label>
+        </div>
       </div>
+
+      <div class="stream-toolbar">
+        <label><span>DISPLAY</span><select [(ngModel)]="remoteMonitor" (change)="changeMonitor()">@for(m of monitors();track m.id){<option [value]="m.id">{{m.name}} · {{m.width}}×{{m.height}}</option>}</select></label>
+        <label><span>STREAM MODE</span><select [(ngModel)]="remotePreset" (change)="changePreset()"><option value="max">MAX FPS · 60 target</option><option value="balanced">BALANCED · 45 target</option><option value="quality">HIGH QUALITY · 30 target</option></select></label>
+        <div class="stream-stat" [class.live]="streamState()==='live'"><span>STREAM</span><strong>{{streamState()|uppercase}}</strong></div>
+        <div class="stream-stat"><span>ACTUAL FPS</span><strong>{{streamFps()|number:'1.0-1'}}</strong></div>
+        <div class="stream-stat"><span>LATENCY</span><strong>{{streamLatency()}} ms</strong></div>
+        <div class="stream-stat"><span>FRAME</span><strong>{{streamWidth()}}×{{streamHeight()}}</strong></div>
+      </div>
+
       <div class="security-note">
-        <strong>{{remoteControlEnabled()?'Mouse and keyboard input is enabled.':'View-only mode is active.'}}</strong>
-        <span>Remote input is disabled by default and is never marked VERIFIED because Windows cannot prove what the foreground application did with each input event.</span>
+        <strong>{{remoteControlEnabled()?'Mouse, touch gestures and keyboard input are enabled.':'View-only mode is active.'}}</strong>
+        <span>The FPS value is measured from frames actually decoded on this iPad. 60 FPS is a target, not a fake guaranteed value.</span>
       </div>
-      <div class="screen-frame" [class.control-enabled]="remoteControlEnabled()">
-        <img #remoteImage [src]="remoteFrameUrl" alt="Live Windows desktop" draggable="false"
-             (pointerdown)="remotePointerDown($event)" (pointermove)="remotePointerMove($event)" (pointerup)="remotePointerUp($event)" (pointercancel)="remotePointerUp($event)"
-             (contextmenu)="remoteContextMenu($event)" (wheel)="remoteWheel($event)" />
+
+      <div class="gesture-help">
+        <span>1 TAP · CLICK</span><span>2 TAPS · DOUBLE CLICK</span><span>HOLD · RIGHT CLICK</span><span>DRAG · MOVE WINDOW</span><span>2 FINGERS · SCROLL / PINCH ZOOM</span>
       </div>
+
+      <div class="remote-stage" [class.control-enabled]="remoteControlEnabled()">
+        <div class="screen-scroll">
+          <canvas #remoteCanvas tabindex="0" class="remote-canvas" [style.width.%]="remoteZoom()*100"
+                  (pointerdown)="remotePointerDown($event)" (pointermove)="remotePointerMove($event)" (pointerup)="remotePointerUp($event)" (pointercancel)="remotePointerCancel($event)"
+                  (contextmenu)="remoteContextMenu($event)" (wheel)="remoteWheel($event)"></canvas>
+        </div>
+        <div class="zoom-tools"><button type="button" (click)="zoomOut()">−</button><strong>{{remoteZoom()*100|number:'1.0-0'}}%</strong><button type="button" (click)="zoomIn()">+</button><button type="button" (click)="resetZoom()">FIT</button></div>
+      </div>
+
+      <div class="remote-shortcuts">
+        <span class="eyebrow">KEYBOARD SHORTCUTS</span>
+        <div class="shortcut-grid">
+          @for(shortcut of ['CTRL+C','CTRL+V','CTRL+X','CTRL+Z','CTRL+A','ALT+TAB','ALT+F4','WIN+D','WIN+E','WIN+R','WIN+TAB','WIN+SHIFT+S'];track shortcut){
+            <button type="button" [disabled]="!remoteControlEnabled()" (click)="remoteShortcut(shortcut)">{{shortcut}}</button>
+          }
+        </div>
+      </div>
+
       <div class="remote-tools">
         <div class="remote-keys">
-          @for(key of ['Escape','Tab','Enter','Backspace','Delete','ArrowLeft','ArrowUp','ArrowDown','ArrowRight'];track key){
+          @for(key of ['Escape','Tab','Enter','Backspace','Delete','ArrowLeft','ArrowUp','ArrowDown','ArrowRight','Home','End','PageUp','PageDown'];track key){
             <button type="button" [disabled]="!remoteControlEnabled()" (click)="remoteKey(key)">{{key.replace('Arrow','')}}</button>
           }
         </div>
-        <div class="remote-type">
-          <input [(ngModel)]="remoteText" [disabled]="!remoteControlEnabled()" placeholder="Type text on the PC…" (keyup.enter)="sendRemoteText()" />
-          <button type="button" [disabled]="!remoteControlEnabled()||!remoteText" (click)="sendRemoteText()">SEND TEXT</button>
-        </div>
+        <div class="remote-type"><input [(ngModel)]="remoteText" [disabled]="!remoteControlEnabled()" placeholder="Type text on the PC…" (keyup.enter)="sendRemoteText()" /><button type="button" [disabled]="!remoteControlEnabled()||!remoteText" (click)="sendRemoteText()">SEND TEXT</button></div>
       </div>
+      <p class="remote-note">Ctrl+Alt+Delete is intentionally unavailable because Windows reserves it for the secure desktop. Remote input is reported as EXECUTED • STATE UNVERIFIED; window and process controls still use real verification where Windows exposes it.</p>
     </section>
   }
 
   @if(tab==='layout'){
     <section class="panel">
-      <div class="panel-head">
-        <div><span class="eyebrow">PERSONAL DASHBOARD</span><h2>Home Layout</h2></div>
-        <button class="secondary" type="button" (click)="resetHomeLayout()">RESTORE DEFAULTS</button>
-      </div>
+      <div class="panel-head"><div><span class="eyebrow">PERSONAL DASHBOARD</span><h2>Home Layout</h2></div><button class="secondary" type="button" (click)="resetHomeLayout()">RESTORE DEFAULTS</button></div>
       <p class="layout-copy">Choose which Home cards are visible, their order, and whether a card should occupy one or two grid columns. Changes are persisted in your local TWIN A configuration.</p>
       <div class="layout-list">
         @for(item of homeCards();track item.key;let i=$index){
           <article class="layout-row" [class.hidden-card]="!item.visible">
-            <div class="drag-index">{{(i+1).toString().padStart(2,'0')}}</div>
-            <div class="layout-name"><strong>{{item.label}}</strong><small>{{item.key}}</small></div>
+            <div class="drag-index">{{(i+1).toString().padStart(2,'0')}}</div><div class="layout-name"><strong>{{item.label}}</strong><small>{{item.key}}</small></div>
             <button type="button" [class.actual]="item.visible" (click)="toggleHomeCard(item)">{{item.visible?'VISIBLE':'HIDDEN'}}</button>
             <button type="button" [class.actual]="item.size==='wide'" (click)="toggleCardSize(item)">{{item.size==='wide'?'WIDE':'NORMAL'}}</button>
-            <div class="move-buttons">
-              <button type="button" [disabled]="i===0" (click)="moveHomeCard(item,-1)">↑</button>
-              <button type="button" [disabled]="i===homeCards().length-1" (click)="moveHomeCard(item,1)">↓</button>
-            </div>
+            <div class="move-buttons"><button type="button" [disabled]="i===0" (click)="moveHomeCard(item,-1)">↑</button><button type="button" [disabled]="i===homeCards().length-1" (click)="moveHomeCard(item,1)">↓</button></div>
           </article>
         }
       </div>
     </section>
   }
 
-  @if(feedback();as f){
-    <div class="desktop-feedback" [class.success]="f.state==='success'" [class.warning]="f.state==='warning'" [class.error]="f.state==='error'">
-      <strong>{{f.title}}</strong><span>{{f.detail}}</span>
-    </div>
-  }
+  @if(feedback();as f){<div class="desktop-feedback" [class.success]="f.state==='success'" [class.warning]="f.state==='warning'" [class.error]="f.state==='error'"><strong>{{f.title}}</strong><span>{{f.detail}}</span></div>}
 </section>
