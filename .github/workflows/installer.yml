@@ -1,0 +1,50 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/installer-pinch-v09'
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'installer/**'
+      - 'scripts/**'
+      - '.github/workflows/installer.yml'
+      - 'TwinAControlCenter.sln'
+      - 'README.md'
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: .\scripts\package-installer.ps1
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWIN-A-Control-Center-Installer
+          path: artifacts/installer/*.exe
+          if-no-files-found: error
+          retention-days: 14
