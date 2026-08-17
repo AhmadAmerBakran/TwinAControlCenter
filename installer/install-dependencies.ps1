@@ -16,8 +16,8 @@ function Write-Log([string]$Message) {
 }
 
 function Test-PackageInstalled([string]$Id) {
-    winget list --id $Id -e --accept-source-agreements 2>$null | Out-Null
-    return $LASTEXITCODE -eq 0
+    $output = winget list --id $Id -e --accept-source-agreements --disable-interactivity 2>$null | Out-String
+    return ($LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($Id))
 }
 
 function Install-Package([string]$Id, [string]$Name) {
@@ -28,8 +28,10 @@ function Install-Package([string]$Id, [string]$Name) {
 
     Write-Log "Installing $Name ($Id) with Windows Package Manager."
     winget install --id $Id -e --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
-    if ($LASTEXITCODE -eq 0) {
-        Write-Log "$Name installed successfully."
+    if ($LASTEXITCODE -eq 0 -and (Test-PackageInstalled $Id)) {
+        Write-Log "$Name installed and detected successfully."
+    } elseif ($LASTEXITCODE -eq 0) {
+        Write-Log "$Name installer returned success but the package could not yet be detected. The user should verify the application before relying on the integration."
     } else {
         Write-Log "$Name installation returned exit code $LASTEXITCODE. The user can install it manually later."
     }
