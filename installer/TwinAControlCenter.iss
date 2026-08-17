@@ -4,9 +4,11 @@
 #ifndef OutputRoot
   #define OutputRoot "..\artifacts\installer"
 #endif
+#ifndef AppVersion
+  #define AppVersion "0.9.0-dev"
+#endif
 
 #define AppName "TWIN A Control Center"
-#define AppVersion "0.9.0-dev"
 #define AppPublisher "TWIN A"
 #define AppExeName "TwinA.Launcher.exe"
 
