@@ -4,6 +4,9 @@ import { provideRouter } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { isDevMode } from '@angular/core';
 import { AppComponent } from './app/app.component';
+import { installScreenWakeLock } from './wake-lock';
+
+installScreenWakeLock();
 
 bootstrapApplication(AppComponent, {
   providers: [

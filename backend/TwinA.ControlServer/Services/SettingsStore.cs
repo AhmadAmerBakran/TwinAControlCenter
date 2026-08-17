@@ -34,6 +34,7 @@ public sealed class SettingsStore
         lock (_gate)
         {
             var result = update(_settings);
+            Normalize();
             SaveInternal();
             return result;
         }
@@ -107,6 +108,22 @@ public sealed class SettingsStore
         _settings.Mqtt ??= new MqttConfig();
         _settings.Mqtt.Devices ??= new();
         _settings.Ui ??= new UiPreferences();
+        _settings.Ui.HomeCards ??= new();
+
+        var defaults = HomeCardPreference.CreateDefaults();
+        foreach (var defaultCard in defaults)
+        {
+            if (_settings.Ui.HomeCards.Any(c => c.Key.Equals(defaultCard.Key, StringComparison.OrdinalIgnoreCase))) continue;
+            _settings.Ui.HomeCards.Add(defaultCard);
+        }
+        foreach (var card in _settings.Ui.HomeCards)
+        {
+            card.Key ??= string.Empty;
+            card.Label ??= card.Key;
+            if (!card.Size.Equals("wide", StringComparison.OrdinalIgnoreCase)) card.Size = "normal";
+        }
+        _settings.Ui.HomeCards = _settings.Ui.HomeCards.OrderBy(c => c.Order).ThenBy(c => c.Label, StringComparer.OrdinalIgnoreCase).ToList();
+
         foreach (var flow in _settings.Flows)
         {
             flow.Steps ??= new();

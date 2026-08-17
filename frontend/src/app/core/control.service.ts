@@ -28,7 +28,59 @@ export interface FlowStep { command:string; payload:Record<string,string>; delay
 export interface FlowConfig { id:string; name:string; category:string; steps:FlowStep[]; }
 export interface MqttDevice { id:string; name:string; stateTopic:string; commandTopic:string; onPayload:string; offPayload:string; }
 export interface MqttDeviceState { id:string; name:string; value:string|null; online:boolean; stateTopic:string; }
-export interface AppSettings { customGames:any[]; gameProfiles:GameProfile[]; devProjects:DevProject[]; flows:FlowConfig[]; mqtt:{enabled:boolean;host:string;port:number;tls:boolean;username:string;devices:MqttDevice[]}; ui:{confirmPowerActions:boolean;protectSystemPaths:boolean}; }
+
+export interface DesktopRuntime {
+  steamRunning:boolean;
+  discordRunning:boolean;
+  obsRunning:boolean;
+  foregroundTitle:string;
+  foregroundProcess:string;
+  foregroundPid:number;
+  windowCount:number;
+  processCount:number;
+}
+export interface DesktopWindow {
+  handle:number;
+  title:string;
+  processName:string;
+  pid:number;
+  foreground:boolean;
+  minimized:boolean;
+  maximized:boolean;
+}
+export interface DesktopProcess {
+  pid:number;
+  name:string;
+  windowTitle:string;
+  memoryBytes:number;
+  hasWindow:boolean;
+  responding:boolean;
+  protected:boolean;
+}
+export interface AppAudioSession {
+  pid:number;
+  processName:string;
+  displayName:string;
+  volume:number;
+  muted:boolean;
+  sessionCount:number;
+}
+export interface HomeCardPreference {
+  key:string;
+  label:string;
+  visible:boolean;
+  size:'normal'|'wide'|string;
+  order:number;
+}
+
+export interface AppSettings {
+  customGames:any[];
+  gameProfiles:GameProfile[];
+  devProjects:DevProject[];
+  flows:FlowConfig[];
+  mqtt:{enabled:boolean;host:string;port:number;tls:boolean;username:string;devices:MqttDevice[]};
+  ui:{confirmPowerActions:boolean;protectSystemPaths:boolean;enableRemoteControl:boolean;homeCards:HomeCardPreference[]};
+}
 export interface SettingsEnvelope { version:string; settings:AppSettings; configPath:string; obsPasswordStored:boolean; mqttPasswordStored:boolean; }
 
 const offline:ControlSnapshot={pc:'offline',vpn:'offline',agent:'offline',obs:'offline',recording:false,recordingPaused:false,recordingSeconds:0,scene:'—',replayBuffer:false,studioMode:false,scenes:[],obsAudioSources:[],micMuted:false,desktopMuted:false,cpu:0,gpu:0,ram:0,gpuTemp:0,networkDownMbps:0,networkUpMbps:0,currentGame:null,sessionName:'TWIN A Control Center',masterVolume:0,masterMuted:false,lastScreenshotPath:null};
