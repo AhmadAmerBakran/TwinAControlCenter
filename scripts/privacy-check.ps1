@@ -11,6 +11,15 @@ try {
     )
 
     $allowedIpv4 = @('127.0.0.1','0.0.0.0','255.255.255.255')
+
+    # Known documentation/UI placeholders are allowed only in the exact file where
+    # they are intentionally shown as examples. Keep actual machine/local addresses
+    # blocked everywhere else. Build the address from octets so this check does not
+    # accidentally flag its own source code as containing the example literal.
+    $allowedIpv4ByFile = @{
+        'frontend/src/app/app.component.html' = @((@('192','168','1','10') -join '.'))
+    }
+
     $findings = New-Object System.Collections.Generic.List[string]
     $tracked = git ls-files
 
@@ -29,7 +38,10 @@ try {
 
         foreach ($match in [regex]::Matches($text, '(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])')) {
             $ip = $match.Value
-            if ($allowedIpv4 -notcontains $ip) {
+            $fileAllowedIpv4 = $allowedIpv4ByFile[$relative]
+            $isKnownPlaceholder = $fileAllowedIpv4 -and ($fileAllowedIpv4 -contains $ip)
+
+            if (($allowedIpv4 -notcontains $ip) -and -not $isKnownPlaceholder) {
                 $findings.Add("$relative contains a literal IPv4 address ($ip). Replace machine-specific addresses with discovery/configuration.")
             }
         }
