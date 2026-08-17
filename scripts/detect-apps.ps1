@@ -32,7 +32,11 @@ function Get-SteamRoots {
         } catch { }
     }
 
-    foreach ($fallback in @("$env:ProgramFiles(x86)\Steam", "$env:ProgramFiles\Steam")) {
+    $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    foreach ($fallback in @(
+        $(if ($programFilesX86) { Join-Path $programFilesX86 'Steam' }),
+        $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Steam' })
+    )) {
         if (-not [string]::IsNullOrWhiteSpace($fallback) -and -not $roots.Contains($fallback)) { $roots.Add($fallback) }
     }
     return $roots
@@ -57,9 +61,10 @@ function Get-SteamLibraries([string]$SteamRoot) {
 Write-Info 'TWIN A - detecting optional applications...'
 
 $obsCandidates = New-Object 'System.Collections.Generic.List[string]'
-Add-Candidate $obsCandidates "$env:ProgramFiles\obs-studio\bin\64bit\obs64.exe"
-Add-Candidate $obsCandidates "$env:ProgramFiles(x86)\obs-studio\bin\64bit\obs64.exe"
-Add-Candidate $obsCandidates "$env:LOCALAPPDATA\Programs\obs-studio\bin\64bit\obs64.exe"
+Add-Candidate $obsCandidates (Join-Path $env:ProgramFiles 'obs-studio\bin\64bit\obs64.exe')
+$programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+if ($programFilesX86) { Add-Candidate $obsCandidates (Join-Path $programFilesX86 'obs-studio\bin\64bit\obs64.exe') }
+Add-Candidate $obsCandidates (Join-Path $env:LOCALAPPDATA 'Programs\obs-studio\bin\64bit\obs64.exe')
 
 foreach ($steamRoot in Get-SteamRoots) {
     foreach ($library in Get-SteamLibraries $steamRoot) {
