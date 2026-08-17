@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using TwinA.DesktopAgent.V08;
 
 namespace TwinA.DesktopAgent.V07;
 
@@ -38,7 +39,7 @@ internal static class DesktopV07Agent
                 var line = await reader.ReadLineAsync();
                 if (string.IsNullOrWhiteSpace(line))
                 {
-                    await writer.WriteLineAsync(JsonSerializer.Serialize(new DesktopV07Response(false, "Empty v0.7 command.", null), JsonOptions));
+                    await writer.WriteLineAsync(JsonSerializer.Serialize(new DesktopV07Response(false, "Empty desktop command.", null), JsonOptions));
                     continue;
                 }
 
@@ -60,7 +61,7 @@ internal static class DesktopV07Agent
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"TWIN A v0.7 desktop channel error: {ex.Message}");
+                Console.Error.WriteLine($"TWIN A desktop channel error: {ex.Message}");
                 await Task.Delay(350);
             }
         }
@@ -73,13 +74,14 @@ internal static class DesktopV07Agent
             "desktop.runtime.get" => Task.FromResult(Ok("Runtime state read from Windows.", WindowRuntime.GetRuntimeJson())),
             "desktop.windows.get" => Task.FromResult(Ok("Visible top-level windows read from Windows.", WindowRuntime.GetWindowsJson())),
             "desktop.processes.get" => Task.FromResult(Ok("Running processes read from Windows.", WindowRuntime.GetProcessesJson())),
+            "desktop.monitors.get" => Task.FromResult(Ok("Display topology read from Windows.", MonitorRuntime.GetMonitorsJson())),
             "desktop.window.action" => Task.FromResult(WindowRuntime.WindowAction(payload)),
             "desktop.process.end" => WindowRuntime.EndProcessAsync(payload),
             "audio.sessions.get" => Task.FromResult(AudioSessionRuntime.GetSessions()),
             "audio.session.set" => Task.FromResult(AudioSessionRuntime.SetSession(payload)),
             "desktop.frame.get" => Task.FromResult(RemoteDesktopRuntime.Capture(payload)),
             "desktop.input" => Task.FromResult(RemoteDesktopRuntime.Input(payload)),
-            _ => Task.FromResult(new DesktopV07Response(false, $"Unknown v0.7 desktop command '{command}'.", null))
+            _ => Task.FromResult(new DesktopV07Response(false, $"Unknown desktop command '{command}'.", null))
         };
     }
 
