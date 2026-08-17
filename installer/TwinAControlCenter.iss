@@ -54,6 +54,7 @@ Source: "{#SourceRoot}\install-dependencies.ps1"; DestDir: "{app}"; Flags: ignor
 
 [Icons]
 Name: "{autoprograms}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"
+Name: "{autoprograms}\TWIN A - Configure iPad Access"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; WorkingDir: "{app}\launcher"
 Name: "{autoprograms}\TWIN A - Read Me"; Filename: "{app}\README.md"
 Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; Tasks: desktopicon
 
@@ -65,7 +66,7 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Obs"; StatusMsg: "Installing OBS Studio if needed..."; Flags: runhidden waituntilterminated; Tasks: obs
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Steam"; StatusMsg: "Installing Steam if needed..."; Flags: runhidden waituntilterminated; Tasks: steam
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Discord"; StatusMsg: "Installing Discord if needed..."; Flags: runhidden waituntilterminated; Tasks: discord
-Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; Description: "Start TWIN A Control Center"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; Description: "Start TWIN A and configure private iPad access"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/IM TwinA.Launcher.exe /T /F"; Flags: runhidden; RunOnceId: "StopTwinALauncher"
