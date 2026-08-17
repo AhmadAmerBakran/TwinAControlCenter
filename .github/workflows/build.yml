@@ -26,6 +26,9 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Privacy check
+        shell: powershell
+        run: .\scripts\privacy-check.ps1
       - name: Build TWIN A
         shell: powershell
         run: .\scripts\build.ps1
