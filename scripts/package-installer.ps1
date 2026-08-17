@@ -43,19 +43,25 @@ Copy-Item (Join-Path $Root 'README.md') (Join-Path $Payload 'README.md') -Force
 if (Test-Path (Join-Path $Root 'LICENSE')) { Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $Payload 'LICENSE') -Force }
 Copy-Item (Join-Path $Root 'installer\install-dependencies.ps1') (Join-Path $Payload 'install-dependencies.ps1') -Force
 
-$innoCandidates = @(
+$innoCompiler = @(
     "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-) | Where-Object { $_ -and (Test-Path $_) }
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 
-if (-not $innoCandidates) {
+if (-not $innoCompiler) {
     throw 'Inno Setup compiler was not found. Install Inno Setup 7 (recommended) or 6 and run this script again.'
 }
 
+Write-Host "Using Inno Setup compiler: $innoCompiler" -ForegroundColor DarkGray
 $iss = Join-Path $Root 'installer\TwinAControlCenter.iss'
-& $innoCandidates[0] "/DSourceRoot=$Payload" "/DOutputRoot=$Artifacts" "/DAppVersion=$Version" $iss
+& $innoCompiler "/DSourceRoot=$Payload" "/DOutputRoot=$Artifacts" "/DAppVersion=$Version" $iss
 Assert-LastExitCode 'Inno Setup compile'
 
-Write-Host "Installer created under $Artifacts" -ForegroundColor Green
+$installer = Get-ChildItem -Path $Artifacts -Filter '*.exe' -File | Select-Object -First 1
+if (-not $installer) {
+    throw 'Inno Setup completed without producing an installer executable.'
+}
+
+Write-Host "Installer created: $($installer.FullName)" -ForegroundColor Green
