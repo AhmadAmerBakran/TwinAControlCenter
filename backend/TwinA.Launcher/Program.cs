@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -88,6 +89,7 @@ internal static class Program
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open TWIN A", null, (_, _) => OpenDashboard());
         menu.Items.Add("Configure iPad Access", null, (_, _) => _ = ConfigureIpadAccessAsync());
+        menu.Items.Add("Configure OBS Password", null, (_, _) => ConfigureObsPassword());
         menu.Items.Add("Open Tailscale", null, (_, _) => OpenTailscale());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Restart TWIN A", null, (_, _) => RestartServices());
@@ -135,6 +137,80 @@ internal static class Program
     {
         try { Process.Start(new ProcessStartInfo { FileName = DashboardUri.ToString(), UseShellExecute = true }); }
         catch { }
+    }
+
+    private static void ConfigureObsPassword()
+    {
+        using var form = new Form
+        {
+            Text = "TWIN A — OBS WebSocket Password",
+            StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            ClientSize = new Size(470, 185),
+            ShowInTaskbar = true
+        };
+
+        var intro = new Label
+        {
+            Left = 18,
+            Top = 16,
+            Width = 430,
+            Height = 42,
+            Text = "Enter the password configured in OBS → Tools → WebSocket Server Settings. It is stored only in your Windows user environment and is never written into the TWIN A installation or GitHub repository."
+        };
+        var password = new TextBox
+        {
+            Left = 18,
+            Top = 72,
+            Width = 430,
+            UseSystemPasswordChar = true
+        };
+        var save = new Button
+        {
+            Text = "Save",
+            Left = 274,
+            Top = 120,
+            Width = 82,
+            DialogResult = DialogResult.OK
+        };
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            Left = 366,
+            Top = 120,
+            Width = 82,
+            DialogResult = DialogResult.Cancel
+        };
+
+        form.Controls.AddRange([intro, password, save, cancel]);
+        form.AcceptButton = save;
+        form.CancelButton = cancel;
+
+        if (form.ShowDialog() != DialogResult.OK) return;
+        var value = password.Text;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            var remove = MessageBox.Show(
+                "The password field is empty. Remove the currently stored TWIN A OBS password?",
+                "TWIN A — OBS Password",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (remove != DialogResult.Yes) return;
+            Environment.SetEnvironmentVariable("TWINA_OBS_PASSWORD", null, EnvironmentVariableTarget.User);
+        }
+        else
+        {
+            Environment.SetEnvironmentVariable("TWINA_OBS_PASSWORD", value, EnvironmentVariableTarget.User);
+        }
+
+        RestartServices();
+        MessageBox.Show(
+            "OBS WebSocket password saved locally for this Windows user. TWIN A was restarted so the new value is active.",
+            "TWIN A — OBS Password",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
     private static string? TailscaleCliPath()
