@@ -13,8 +13,10 @@ builder.Services.AddSingleton<ControlState>();
 builder.Services.AddSingleton<ProcessRunner>();
 builder.Services.AddSingleton<SessionMarkerService>();
 builder.Services.AddSingleton<DesktopAgentClient>();
+builder.Services.AddSingleton<DesktopV07Client>();
 builder.Services.AddSingleton<ObsWebSocketClient>();
 builder.Services.AddSingleton<SettingsStore>();
+builder.Services.AddSingleton<DesktopControlService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<SteamLibraryService>();
 builder.Services.AddSingleton<FileWorkspaceService>();
@@ -36,7 +38,7 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
-app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.5.3", time = DateTimeOffset.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.7.0-dev", time = DateTimeOffset.UtcNow }));
 app.MapGet("/api/state", (ControlState state) => state.Snapshot);
 app.MapPost("/api/commands/{command}", async (string command, HttpRequest request, CommandDispatcher dispatcher, CancellationToken ct) =>
 {
@@ -59,6 +61,43 @@ app.MapPost("/api/sounds/upload", async (HttpRequest request, string fileName, S
     return Results.Ok(new { ok = true, path = target, sound = sounds.List().FirstOrDefault(s => Path.Combine(sounds.Root, s.FileName).Equals(target, StringComparison.OrdinalIgnoreCase)) });
 });
 app.MapDelete("/api/sounds/{id}", (string id, SoundboardService sounds) => sounds.Delete(id) ? Results.Ok(new { ok=true }) : Results.BadRequest(new { ok=false }));
+
+// DESKTOP v0.7 - real state, window/task manager, per-app audio and private remote desktop.
+app.MapGet("/api/desktop/runtime", async (DesktopControlService desktop, CancellationToken ct) =>
+    DesktopControlService.JsonData(await desktop.RuntimeAsync(ct)));
+app.MapGet("/api/desktop/windows", async (DesktopControlService desktop, CancellationToken ct) =>
+    DesktopControlService.JsonData(await desktop.WindowsAsync(ct)));
+app.MapGet("/api/desktop/processes", async (DesktopControlService desktop, CancellationToken ct) =>
+    DesktopControlService.JsonData(await desktop.ProcessesAsync(ct)));
+app.MapGet("/api/desktop/audio-sessions", async (DesktopControlService desktop, CancellationToken ct) =>
+    DesktopControlService.JsonData(await desktop.AudioSessionsAsync(ct)));
+app.MapPost("/api/desktop/window/action", async (DesktopWindowActionRequest request, DesktopControlService desktop, CancellationToken ct) =>
+{
+    var result = await desktop.WindowActionAsync(request.Handle, request.Action, ct);
+    return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
+});
+app.MapPost("/api/desktop/process/end", async (DesktopProcessEndRequest request, DesktopControlService desktop, CancellationToken ct) =>
+{
+    var result = await desktop.EndProcessAsync(request.Pid, ct);
+    return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
+});
+app.MapPost("/api/desktop/audio-session", async (DesktopAudioSessionRequest request, DesktopControlService desktop, CancellationToken ct) =>
+{
+    var result = await desktop.SetAudioSessionAsync(request.Pid, request.Volume, request.Muted, ct);
+    return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
+});
+app.MapGet("/api/desktop/frame", async (int? maxWidth, int? quality, DesktopControlService desktop, CancellationToken ct) =>
+{
+    var result = await desktop.CaptureFrameAsync(maxWidth ?? 1600, quality ?? 62, ct);
+    return result.Ok && result.Bytes is not null
+        ? Results.File(result.Bytes, "image/jpeg", enableRangeProcessing: false)
+        : Results.Problem(result.Message, statusCode: 503);
+});
+app.MapPost("/api/desktop/input", async (DesktopInputRequest request, DesktopControlService desktop, CancellationToken ct) =>
+{
+    var result = await desktop.InputAsync(request, ct);
+    return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
+});
 
 // GAMES
 app.MapGet("/api/games", (SteamLibraryService steam) => Results.Ok(steam.GetAllGames()));
@@ -100,7 +139,7 @@ app.MapPost("/api/games/profile", async (HttpRequest request, SettingsStore sett
 });
 app.MapDelete("/api/games/profile/{gameId}", (string gameId, SettingsStore settings) =>
 {
-    var removed = settings.Update(config => config.GameProfiles.RemoveAll(p => p.GameId.Equals(gameId, StringComparison.OrdinalIgnoreCase)) > 0);
+    var removed = settings.Update(config => config.GameProfiles.RemoveAll(p => p.GameId.Equals(gameId,StringComparison.OrdinalIgnoreCase)) > 0);
     return removed ? Results.Ok(new {ok=true}) : Results.NotFound();
 });
 
@@ -139,7 +178,7 @@ app.MapPost("/api/flows", async (HttpRequest request, SettingsStore settings, Ca
     flow.Id = string.IsNullOrWhiteSpace(flow.Id) ? Guid.NewGuid().ToString("N") : flow.Id;
     var saved = settings.Update(config =>
     {
-        var index = config.Flows.FindIndex(f => f.Id.Equals(flow.Id, StringComparison.OrdinalIgnoreCase));
+        var index = config.Flows.FindIndex(f => f.Id.Equals(flow.Id,StringComparison.OrdinalIgnoreCase));
         if (index >= 0) config.Flows[index] = flow; else config.Flows.Add(flow);
         return flow;
     });
@@ -148,7 +187,7 @@ app.MapPost("/api/flows", async (HttpRequest request, SettingsStore settings, Ca
 app.MapDelete("/api/flows/{id}", (string id, SettingsStore settings) => settings.Update(config => config.Flows.RemoveAll(f => f.Id.Equals(id,StringComparison.OrdinalIgnoreCase))>0) ? Results.Ok(new{ok=true}) : Results.NotFound());
 app.MapGet("/api/settings", (SettingsStore settings) => Results.Ok(new
 {
-    version = "0.5.3",
+    version = "0.7.0-dev",
     settings = settings.Get(),
     configPath = settings.ConfigPath,
     obsPasswordStored = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("TWINA_OBS_PASSWORD")),
