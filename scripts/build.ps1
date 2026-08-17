@@ -57,4 +57,7 @@ Assert-LastExitCode 'Control Server build'
 dotnet build "$Root\backend\TwinA.DesktopAgent\TwinA.DesktopAgent.csproj" -c Release
 Assert-LastExitCode 'Desktop Agent build'
 
+dotnet build "$Root\backend\TwinA.Launcher\TwinA.Launcher.csproj" -c Release
+Assert-LastExitCode 'Launcher build'
+
 Write-Host 'TWIN A build complete - all build steps succeeded.' -ForegroundColor Green
