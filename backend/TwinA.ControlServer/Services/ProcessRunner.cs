@@ -6,11 +6,15 @@ public sealed class ProcessRunner
 {
     public void Open(string target, string? arguments = null, string? workingDirectory = null)
     {
+        var resolvedWorkingDirectory = workingDirectory;
+        if (string.IsNullOrWhiteSpace(resolvedWorkingDirectory) && Path.IsPathFullyQualified(target) && File.Exists(target))
+            resolvedWorkingDirectory = Path.GetDirectoryName(target);
+
         _ = Process.Start(new ProcessStartInfo
         {
             FileName = target,
             Arguments = arguments ?? string.Empty,
-            WorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory) ? string.Empty : workingDirectory,
+            WorkingDirectory = string.IsNullOrWhiteSpace(resolvedWorkingDirectory) ? string.Empty : resolvedWorkingDirectory,
             UseShellExecute = true
         }) ?? throw new InvalidOperationException($"Windows did not accept the launch request for {target}.");
     }
