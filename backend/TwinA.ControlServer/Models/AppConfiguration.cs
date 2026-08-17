@@ -88,4 +88,29 @@ public sealed class UiPreferences
 {
     public bool ConfirmPowerActions { get; set; } = true;
     public bool ProtectSystemPaths { get; set; } = true;
+    public bool EnableRemoteControl { get; set; }
+    public List<HomeCardPreference> HomeCards { get; set; } = HomeCardPreference.CreateDefaults();
+}
+
+public sealed class HomeCardPreference
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
+    public bool Visible { get; set; } = true;
+    public string Size { get; set; } = "normal";
+    public int Order { get; set; }
+
+    public static List<HomeCardPreference> CreateDefaults() =>
+    [
+        new() { Key = "cpu", Label = "CPU", Order = 10 },
+        new() { Key = "gpu", Label = "GPU", Order = 20 },
+        new() { Key = "ram", Label = "RAM", Order = 30 },
+        new() { Key = "gpuTemp", Label = "GPU Temperature", Order = 40 },
+        new() { Key = "record", Label = "OBS Recording", Order = 100 },
+        new() { Key = "replay", Label = "Save Replay", Order = 110 },
+        new() { Key = "mark", Label = "Mark Moment", Order = 120 },
+        new() { Key = "screenshot", Label = "Screenshot", Order = 130 },
+        new() { Key = "steam", Label = "Steam", Order = 140 },
+        new() { Key = "discord", Label = "Discord Deafen", Order = 150 }
+    ];
 }
