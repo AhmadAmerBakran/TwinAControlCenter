@@ -1,19 +1,22 @@
+$ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 
-# Ensure the Tailscale CLI is visible to the Control Server even when Rider/PowerShell
-# was opened before Tailscale was installed or its installer did not update PATH.
 $tailscaleDir = Join-Path $env:ProgramFiles 'Tailscale'
-if (Test-Path $tailscaleDir) {
-    $env:Path = "$tailscaleDir;$env:Path"
-}
-$storedObsPassword = [Environment]::GetEnvironmentVariable('TWINA_OBS_PASSWORD', 'User')
-if (-not [string]::IsNullOrWhiteSpace($storedObsPassword)) {
-    $env:TWINA_OBS_PASSWORD = $storedObsPassword
+if (Test-Path $tailscaleDir) { $env:Path = "$tailscaleDir;$env:Path" }
+
+foreach ($name in @('TWINA_OBS_PASSWORD','TWINA_MQTT_PASSWORD','TWINA_OBS_PATH')) {
+    $stored = [Environment]::GetEnvironmentVariable($name, 'User')
+    if (-not [string]::IsNullOrWhiteSpace($stored)) { Set-Item -Path "Env:$name" -Value $stored }
 }
 
-$storedMqttPassword = [Environment]::GetEnvironmentVariable('TWINA_MQTT_PASSWORD', 'User')
-if (-not [string]::IsNullOrWhiteSpace($storedMqttPassword)) {
-    $env:TWINA_MQTT_PASSWORD = $storedMqttPassword
+if ([string]::IsNullOrWhiteSpace($env:TWINA_OBS_PATH) -or -not (Test-Path $env:TWINA_OBS_PATH)) {
+    & (Join-Path $PSScriptRoot 'detect-apps.ps1') -Quiet
+}
+
+$serverDll = Join-Path $Root 'backend\TwinA.ControlServer\bin\Release\net10.0\TwinA.ControlServer.dll'
+$agentDll = Join-Path $Root 'backend\TwinA.DesktopAgent\bin\Release\net10.0-windows\TwinA.DesktopAgent.dll'
+if (-not (Test-Path $serverDll) -or -not (Test-Path $agentDll)) {
+    throw 'TWIN A has not been built yet. Run .\scripts\build.ps1 first.'
 }
 
 Write-Host 'Starting Desktop Agent...' -ForegroundColor Cyan
