@@ -15,6 +15,17 @@ on:
       - '.github/workflows/installer.yml'
       - 'TwinAControlCenter.sln'
       - 'README.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'installer/**'
+      - 'scripts/**'
+      - '.github/workflows/installer.yml'
+      - 'TwinAControlCenter.sln'
+      - 'README.md'
 
 permissions:
   contents: write
