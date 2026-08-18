@@ -10,7 +10,7 @@
       "prefix": "ta",
       "architect": {
         "build": {
-          "builder": "@angular-devkit/build-angular:application",
+          "builder": "@angular/build:application",
           "options": {
             "outputPath": "dist/twina-control",
             "index": "src/index.html",
@@ -38,7 +38,7 @@
           "defaultConfiguration": "production"
         },
         "serve": {
-          "builder": "@angular-devkit/build-angular:dev-server",
+          "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {"buildTarget":"twina-control:build:production"},
             "development": {"buildTarget":"twina-control:build:development"}
