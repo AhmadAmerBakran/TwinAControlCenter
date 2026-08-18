@@ -7,6 +7,7 @@ on:
       - main
       - 'feature/**'
       - 'improve/**'
+      - 'fix/**'
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -14,6 +15,7 @@ on:
       - 'scripts/**'
       - 'docs/**'
       - '.github/workflows/installer.yml'
+      - '.github/workflows/release-v09-command.yml'
       - 'TwinAControlCenter.sln'
       - 'README.md'
   pull_request:
@@ -26,11 +28,12 @@ on:
       - 'scripts/**'
       - 'docs/**'
       - '.github/workflows/installer.yml'
+      - '.github/workflows/release-v09-command.yml'
       - 'TwinAControlCenter.sln'
       - 'README.md'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: windows-installer-${{ github.ref }}
@@ -81,25 +84,3 @@ jobs:
           path: artifacts/installer/*.exe
           if-no-files-found: error
           retention-days: 14
-
-      - name: Publish GitHub Release asset
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: powershell
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $asset = (Get-ChildItem 'artifacts\installer\*.exe' | Select-Object -First 1).FullName
-          if (-not $asset) { throw 'Installer asset was not produced.' }
-
-          $packageVersion = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
-          $tag = "v$packageVersion"
-
-          gh release view $tag --json tagName *> $null
-          $releaseExists = $LASTEXITCODE -eq 0
-
-          if ($releaseExists) {
-            gh release upload $tag $asset --clobber
-          }
-          else {
-            gh release create $tag $asset --target $env:GITHUB_SHA --generate-notes --title "TWIN A Control Center $tag"
-          }
