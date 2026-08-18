@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'feature/installer-pinch-v09'
+      - main
+      - 'feature/**'
     tags:
       - 'v*'
     paths:
@@ -12,6 +13,7 @@ on:
       - 'frontend/**'
       - 'installer/**'
       - 'scripts/**'
+      - 'docs/**'
       - '.github/workflows/installer.yml'
       - 'TwinAControlCenter.sln'
       - 'README.md'
@@ -23,6 +25,7 @@ on:
       - 'frontend/**'
       - 'installer/**'
       - 'scripts/**'
+      - 'docs/**'
       - '.github/workflows/installer.yml'
       - 'TwinAControlCenter.sln'
       - 'README.md'
@@ -35,15 +38,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -60,11 +63,20 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.9.0-dev' }
+          $packageVersion = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          }
+          elseif ($env:GITHUB_REF -eq 'refs/heads/main') {
+            $version = $packageVersion
+          }
+          else {
+            $version = "$packageVersion-dev"
+          }
           .\scripts\package-installer.ps1 -Version $version
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: TWIN-A-Control-Center-Installer
           path: artifacts/installer/*.exe
@@ -72,11 +84,23 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release asset
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $asset = (Get-ChildItem 'artifacts\installer\*.exe' | Select-Object -First 1).FullName
           if (-not $asset) { throw 'Installer asset was not produced.' }
-          gh release create $env:GITHUB_REF_NAME $asset --generate-notes --title "TWIN A Control Center $env:GITHUB_REF_NAME"
+
+          $packageVersion = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
+          $tag = if ($env:GITHUB_REF -eq 'refs/heads/main') { "v$packageVersion" } else { $env:GITHUB_REF_NAME }
+
+          gh release view $tag --json tagName *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release upload $tag $asset --clobber
+          }
+          else {
+            gh release create $tag $asset --target $env:GITHUB_SHA --generate-notes --title "TWIN A Control Center $tag"
+          }

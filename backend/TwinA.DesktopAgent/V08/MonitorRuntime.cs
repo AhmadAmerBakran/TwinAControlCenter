@@ -112,7 +112,8 @@ internal static class MonitorRuntime
 
     private static void SaveJpeg(Image image, Stream target, int quality)
     {
-        var codec = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.MimeType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase));
+        var codec = ImageCodecInfo.GetImageEncoders()
+            .FirstOrDefault(c => string.Equals(c.MimeType, "image/jpeg", StringComparison.OrdinalIgnoreCase));
         if (codec is null)
         {
             image.Save(target, ImageFormat.Jpeg);

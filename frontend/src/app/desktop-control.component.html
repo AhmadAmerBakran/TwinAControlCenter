@@ -84,7 +84,6 @@
       <div class="panel-head remote-head">
         <div><span class="eyebrow">BINARY WEBSOCKET STREAM</span><h2>Remote Screen</h2></div>
         <div class="remote-head-actions">
-          <button type="button" class="secondary" (click)="toggleZoomTools()">ZOOM</button>
           <button type="button" class="secondary" (click)="toggleExpanded()">{{remoteExpanded()?'EXIT FULL VIEW':'FULL VIEW'}}</button>
           <label class="control-switch" [class.enabled]="remoteControlEnabled()">
             <input type="checkbox" [checked]="remoteControlEnabled()" (change)="changeRemoteControl($any($event.target).checked)" />
@@ -108,18 +107,15 @@
       </div>
 
       <div class="gesture-help">
-        <span>1 TAP · CLICK</span><span>2 TAPS · DOUBLE CLICK</span><span>HOLD · RIGHT CLICK</span><span>DRAG · MOVE WINDOW</span><span>2 FINGERS · SCROLL / PINCH ZOOM</span>
+        <span>1 TAP · CLICK</span><span>2 TAPS · DOUBLE CLICK</span><span>HOLD · RIGHT CLICK</span><span>DRAG · MOVE WINDOW</span><span>2 FINGERS · SCROLL</span>
       </div>
 
       <div class="remote-stage" [class.control-enabled]="remoteControlEnabled()">
         <div class="screen-scroll">
-          <canvas #remoteCanvas tabindex="0" class="remote-canvas" [style.width.%]="remoteZoom()*100"
+          <canvas #remoteCanvas tabindex="0" class="remote-canvas"
                   (pointerdown)="remotePointerDown($event)" (pointermove)="remotePointerMove($event)" (pointerup)="remotePointerUp($event)" (pointercancel)="remotePointerCancel($event)"
                   (contextmenu)="remoteContextMenu($event)" (wheel)="remoteWheel($event)"></canvas>
         </div>
-        @if(zoomToolsVisible()){
-          <div class="zoom-tools"><button type="button" (click)="zoomOut()">−</button><strong>{{remoteZoom()*100|number:'1.0-0'}}%</strong><button type="button" (click)="zoomIn()">+</button><button type="button" (click)="resetZoom()">FIT</button></div>
-        }
       </div>
 
       <div class="remote-shortcuts">

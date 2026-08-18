@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#02050b">
+<title>TWIN A Help Center</title>
+<style>
+:root{color-scheme:dark;--bg:#02050b;--panel:#09131f;--line:rgba(125,199,255,.16);--text:#edf7ff;--muted:#8da6ba;--blue:#35aef7;--green:#62e7a8;--amber:#ffbd61;--red:#ff7180}*{box-sizing:border-box}body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 8% -10%,rgba(0,127,255,.22),transparent 34%),var(--bg);color:var(--text);min-height:100vh}.shell{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:rgba(3,8,16,.94);padding:18px 14px;overflow:auto}.brand{display:flex;align-items:center;gap:11px;padding:6px 6px 17px}.brand img{width:50px;height:50px;border-radius:14px;object-fit:cover;box-shadow:0 0 0 1px rgba(75,183,255,.3),0 0 24px rgba(0,132,255,.17)}.brand strong{display:block;letter-spacing:.17em}.brand span{display:block;color:var(--muted);font-size:9px;letter-spacing:.15em;margin-top:5px}.back{display:block;text-align:center;text-decoration:none;color:#dff3ff;border:1px solid var(--line);background:rgba(20,87,130,.18);border-radius:11px;padding:10px;margin:0 4px 14px;font-size:11px;font-weight:800}.nav{display:grid;gap:5px}.nav button{border:1px solid transparent;background:transparent;color:#8ca2b5;text-align:left;border-radius:11px;padding:11px 12px;font-weight:750;cursor:pointer}.nav button:hover,.nav button.active{color:#fff;background:linear-gradient(135deg,rgba(35,148,231,.2),rgba(255,255,255,.035));border-color:var(--line)}.nav button.active{box-shadow:inset 3px 0 var(--blue)}.privacy{margin:15px 4px 0;padding:11px;border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:10px;line-height:1.5}.main{padding:26px 32px 55px;min-width:0}.hero,.content{max-width:1120px;margin:auto}.hero{padding:25px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(145deg,rgba(13,31,49,.93),rgba(5,13,23,.91));margin-bottom:18px}.eyebrow{font-size:9px;font-weight:850;letter-spacing:.2em;color:#69c8ff}.hero h1{font-size:clamp(31px,5vw,51px);letter-spacing:-.045em;margin:8px 0}.hero p,.lead{color:var(--muted);line-height:1.6}.status{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}.pill{border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:9px;font-weight:800}.green{color:var(--green)}.amber{color:var(--amber)}.red{color:var(--red)}.tab{display:none}.tab.active{display:block}.tab h2{font-size:27px;margin:0 0 8px}.lead{margin:0 0 15px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card{border:1px solid var(--line);border-radius:17px;padding:17px;background:linear-gradient(145deg,rgba(10,25,39,.91),rgba(6,16,27,.89))}.wide{grid-column:1/-1}.card h3{margin:0 0 7px;font-size:15px}.card p,.card li{color:#9bb0c1;line-height:1.55;font-size:12px}.card ul,.card ol{padding-left:19px;margin:8px 0 0}.card li+li{margin-top:6px}code{font-family:Consolas,monospace;color:#bce7ff;background:#06101a;border:1px solid rgba(129,199,255,.1);border-radius:7px;padding:2px 5px}.cmd{margin-top:8px;background:#03090f;border:1px solid var(--line);border-radius:10px;padding:9px 11px;overflow:auto}.cmd code{border:0;background:none;padding:0;white-space:pre}.callout{border-left:3px solid var(--blue);background:rgba(32,135,204,.1);padding:11px 13px;border-radius:8px;color:#a8cce2;font-size:11px;line-height:1.5;margin-top:10px}.callout.warn{border-left-color:var(--amber)}.callout.danger{border-left-color:var(--red)}.table{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden}.row{display:grid;grid-template-columns:155px 1fr;gap:10px;padding:10px 11px;border-top:1px solid rgba(129,199,255,.08);font-size:11px}.row:first-child{border-top:0}.row span{color:#90a8ba}.footer{max-width:1120px;margin:24px auto 0;text-align:center;color:#60798d;font-size:10px}@media(max-width:850px){.shell{grid-template-columns:1fr}.side{position:static;height:auto}.nav{display:flex;overflow:auto;padding-bottom:5px}.nav button{white-space:nowrap}.main{padding:18px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.row{grid-template-columns:1fr}.privacy{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+<div class="brand"><img src="/assets/icon-192.png" alt="TWIN A"><div><strong>TWIN A</strong><span>HELP CENTER</span></div></div>
+<a class="back" href="/">← BACK TO CONTROL CENTER</a>
+<nav class="nav" aria-label="Help topics">
+<button class="active" data-tab="start">Start Here</button><button data-tab="install">Installation</button><button data-tab="ipad">iPad & Tailscale</button><button data-tab="obs">OBS Studio</button><button data-tab="remote">Remote Screen</button><button data-tab="audio">Audio & Discord</button><button data-tab="features">Games, Files & Dev</button><button data-tab="status">Status & Security</button><button data-tab="trouble">Troubleshooting</button><button data-tab="recovery">Update & Recovery</button>
+</nav>
+<div class="privacy">Offline help bundled with TWIN A. No passwords, tokens, private IPs or account credentials are displayed here.</div>
+</aside>
+<main class="main">
+<section class="hero"><div class="eyebrow">POST-INSTALL SUPPORT / WINDOWS + IPAD</div><h1>TWIN A Help Center</h1><p>Use these tabs to finish setup, connect the iPad, configure OBS, understand status messages and recover from common problems without touching source code.</p><div class="status"><span class="pill green">VERIFIED = state confirmed</span><span class="pill amber">EXECUTED • STATE UNVERIFIED = action sent, final state cannot be proven</span><span class="pill red">FAILED = action did not complete</span></div></section>
+<div class="content">
+<section class="tab active" id="start"><h2>Start Here</h2><p class="lead">For a normal first installation, complete these steps in order.</p><div class="grid">
+<article class="card"><h3>1. Start TWIN A</h3><ol><li>Double-click the <b>TWIN A Control Center</b> desktop shortcut.</li><li>Wait a few seconds for the launcher, Control Server and Desktop Agent.</li><li>If needed, open <code>http://127.0.0.1:5055</code> on the PC.</li></ol></article>
+<article class="card"><h3>2. Check the dashboard</h3><ul><li><b>PC</b> should become online.</li><li><b>Desktop Agent</b> should become online.</li><li><b>OBS</b> may stay offline until OBS is opened and configured.</li></ul></article>
+<article class="card"><h3>3. Connect Tailscale</h3><p>Sign in on the PC and iPad with the same permitted Tailscale account/tailnet.</p><div class="cmd"><code>tailscale status</code></div></article>
+<article class="card"><h3>4. Publish privately</h3><div class="cmd"><code>tailscale serve --bg 5055</code></div><div class="cmd"><code>tailscale serve status</code></div></article>
+<article class="card wide"><h3>5. Add to iPad Home Screen</h3><ol><li>Open the private <code>https://...ts.net</code> address in Safari.</li><li>Tap <b>Share → Add to Home Screen</b>.</li><li>Launch TWIN A from the new Home Screen icon.</li></ol><div class="callout danger">Do not expose TWIN A port 5055 through public router port forwarding.</div></article>
+</div></section>
+
+<section class="tab" id="install"><h2>Installation</h2><p class="lead">What the Windows installer provides and what is optional.</p><div class="grid">
+<article class="card"><h3>TWIN A core</h3><ul><li>Control Server</li><li>Desktop Agent</li><li>Windows Launcher/tray</li><li>Web dashboard/PWA</li><li>This Help Center</li></ul><p>The normal installed app is self-contained; end users do not need the .NET SDK or Node.js.</p></article>
+<article class="card"><h3>Optional companions</h3><ul><li><b>Tailscale</b> — private iPad access.</li><li><b>OBS Studio</b> — recording/replay/scenes.</li><li><b>Steam</b> — library discovery.</li><li><b>Discord</b> — supported shortcuts/integration.</li></ul></article>
+<article class="card"><h3>Desktop shortcut</h3><p>The Windows installer creates the TWIN A shortcut with the TWIN A application icon. Double-click it to start/open the Control Center.</p></article>
+<article class="card"><h3>User configuration</h3><div class="cmd"><code>%LOCALAPPDATA%\TwinAControlCenter\config.json</code></div><p>Back this file up before a clean Windows reinstall if you want to keep custom games, projects, flows and IoT settings.</p></article>
+</div></section>
+
+<section class="tab" id="ipad"><h2>iPad & Tailscale</h2><p class="lead">Use this when the PC dashboard works but the iPad cannot connect.</p><div class="grid">
+<article class="card"><h3>PC checks</h3><div class="cmd"><code>tailscale status</code></div><div class="cmd"><code>tailscale serve status</code></div><p>Tailscale should be connected and Serve should forward private HTTPS traffic to TWIN A.</p></article>
+<article class="card"><h3>iPad checks</h3><ol><li>Confirm Tailscale is connected.</li><li>Confirm the same permitted tailnet/account.</li><li>Test the exact <code>.ts.net</code> address in Safari.</li><li>If Safari works but the Home Screen app is stale, remove and re-add its Home Screen icon.</li></ol></article>
+<article class="card"><h3>Recreate Serve</h3><div class="cmd"><code>tailscale serve --bg 5055</code></div><div class="cmd"><code>tailscale serve status</code></div></article>
+<article class="card"><h3>Test locally first</h3><div class="cmd"><code>http://127.0.0.1:5055/api/health</code></div><p>If this is unavailable on the PC, restart TWIN A before troubleshooting Tailscale.</p></article>
+</div></section>
+
+<section class="tab" id="obs"><h2>OBS Studio</h2><p class="lead">Use this when OBS is offline or Studio controls are unavailable.</p><div class="grid">
+<article class="card"><h3>Enable WebSocket</h3><ol><li>Open OBS.</li><li>Tools → WebSocket Server Settings.</li><li>Enable the server on port <code>4455</code>.</li><li>Enable authentication and choose your password.</li></ol></article>
+<article class="card"><h3>Store the password safely</h3><p>Use the TWIN A tray menu → <b>Configure OBS Password</b>. TWIN A stores it locally in the Windows user environment rather than in source code.</p></article>
+<article class="card"><h3>Still offline?</h3><ul><li>Verify port 4455.</li><li>Re-enter the password through the tray.</li><li>Restart OBS, then TWIN A.</li></ul></article>
+<article class="card"><h3>Empty scenes/mixer</h3><p>TWIN A reads real OBS scenes and audio-capable inputs. It does not invent fake sources.</p></article>
+</div></section>
+
+<section class="tab" id="remote"><h2>Remote Screen</h2><p class="lead">Private desktop viewing with optional Windows input.</p><div class="grid">
+<article class="card"><h3>Gestures</h3><div class="table"><div class="row"><b>1 tap</b><span>Left click</span></div><div class="row"><b>2 taps</b><span>Double click</span></div><div class="row"><b>Hold</b><span>Right click</span></div><div class="row"><b>Drag</b><span>Mouse drag</span></div><div class="row"><b>2 fingers</b><span>Scroll</span></div></div><div class="callout">Pinch zoom is intentionally not part of Remote Screen.</div></article>
+<article class="card"><h3>View only vs control</h3><p>The stream can remain view-only. Enable remote control only when you want the iPad to inject mouse/keyboard input.</p></article>
+<article class="card"><h3>Low FPS / latency</h3><ul><li>Try BALANCED mode.</li><li>Check iPad Wi-Fi quality.</li><li>Check PC load.</li><li>Choose one display instead of All Displays if needed.</li></ul></article>
+<article class="card"><h3>Why input is amber</h3><p>Windows can accept injected input but cannot prove what every target app did with it, so raw remote input is correctly reported as state-unverified.</p></article>
+</div></section>
+
+<section class="tab" id="audio"><h2>Audio & Discord</h2><p class="lead">Windows audio can usually be read back; Discord has stricter API limits.</p><div class="grid">
+<article class="card"><h3>Windows master audio</h3><p>Master volume/mute are read from the active Windows endpoint and sync back when changed locally.</p></article>
+<article class="card"><h3>Output and microphone</h3><p>TWIN A changes the Windows default endpoint. Apps pinned to a specific device can keep their own route.</p></article>
+<article class="card"><h3>Per-app mixer</h3><p>Desktop → App Mixer uses actual Windows audio sessions and reads back supported volume/mute state.</p></article>
+<article class="card"><h3>Discord</h3><p>Mute, deafen and Soundboard opening use native client actions. Discord does not expose reliable final mute/deafen state externally, so those actions remain state-unverified.</p></article>
+</div></section>
+
+<section class="tab" id="features"><h2>Games, Files & Dev</h2><p class="lead">How the remaining major areas behave.</p><div class="grid">
+<article class="card"><h3>Games</h3><p>Steam titles are discovered from real Steam libraries. For custom games, add a process name when possible to enable stronger launch verification.</p></article>
+<article class="card"><h3>Files</h3><p>Ready drives are browsable. Windows/system paths and drive roots are protected against destructive mutations by default.</p></article>
+<article class="card"><h3>Dev</h3><p>The installed app is self-contained. SDKs/toolchains are only needed for developer projects you explicitly configure.</p></article>
+<article class="card"><h3>Flows & IoT</h3><p>Flows execute real commands. MQTT devices are never simulated; state topics allow verification when the real device reports the expected state.</p></article>
+</div></section>
+
+<section class="tab" id="status"><h2>Status & Security</h2><p class="lead">The color/status language is deliberately strict.</p><div class="grid">
+<article class="card"><h3 class="green">VERIFIED</h3><p>The action ran and the resulting state was independently confirmed.</p></article>
+<article class="card"><h3 class="amber">EXECUTED • STATE UNVERIFIED</h3><p>The action was sent successfully, but the target exposes no trustworthy final-state confirmation.</p></article>
+<article class="card"><h3 class="red">FAILED</h3><p>The action failed, the target was unavailable, or required verification did not succeed.</p></article>
+<article class="card"><h3>Private access</h3><p>TWIN A is intended to remain local/private and be reached from the iPad through Tailscale rather than a public server port.</p></article>
+</div></section>
+
+<section class="tab" id="trouble"><h2>Troubleshooting</h2><p class="lead">Match the symptom, then test from the inside out.</p><div class="grid">
+<article class="card"><h3>Shortcut opens nothing</h3><ol><li>Look for the TWIN A tray icon.</li><li>Run the shortcut again.</li><li>Test <code>127.0.0.1:5055/api/health</code>.</li><li>If still unavailable, repair/reinstall TWIN A.</li></ol></article>
+<article class="card"><h3>PC works, iPad does not</h3><ol><li>Check Tailscale on both devices.</li><li>Check Serve status.</li><li>Test the <code>.ts.net</code> URL in Safari.</li><li>Re-add the PWA if only the Home Screen copy is stale.</li></ol></article>
+<article class="card"><h3>Remote screen is black</h3><ul><li>Confirm Desktop Agent is online.</li><li>Refresh Desktop.</li><li>Try one display.</li><li>Restart TWIN A from the tray.</li></ul></article>
+<article class="card"><h3>Steam title missing</h3><p>Confirm it is installed in Steam, then use Games → Rescan. TWIN A discovers actual Steam metadata.</p></article>
+<article class="card wide"><h3>Still stuck?</h3><p>Keep the exact red/amber message and the tab/action that produced it. For CI/build problems, keep the exact failing workflow step and error line.</p></article>
+</div></section>
+
+<section class="tab" id="recovery"><h2>Update & Recovery</h2><p class="lead">Preserve user configuration through upgrades or a clean Windows reinstall.</p><div class="grid">
+<article class="card"><h3>Before reinstalling Windows</h3><div class="cmd"><code>%LOCALAPPDATA%\TwinAControlCenter\config.json</code></div><p>Back it up. Also keep the OBS/MQTT credentials you will need to re-enter locally.</p></article>
+<article class="card"><h3>After reinstall</h3><ol><li>Install TWIN A.</li><li>Restore config if desired.</li><li>Reconnect Tailscale.</li><li>Recreate Tailscale Serve.</li><li>Reconfigure OBS password.</li><li>Verify local health, then iPad access.</li></ol></article>
+<article class="card"><h3>Updating TWIN A</h3><p>Install the newer official GitHub Release installer. Keep a config backup before major changes.</p></article>
+<article class="card"><h3>Uninstalling</h3><p>Use Windows Installed Apps / Apps & Features. The uninstaller stops TWIN A processes before removing program files.</p></article>
+</div></section>
+</div><div class="footer">TWIN A Control Center · Built-in Help Center · Live dashboard state remains the source of truth.</div>
+</main></div>
+<script>const bs=[...document.querySelectorAll('[data-tab]')],ts=[...document.querySelectorAll('.tab')];function openTab(id){bs.forEach(b=>b.classList.toggle('active',b.dataset.tab===id));ts.forEach(t=>t.classList.toggle('active',t.id===id));history.replaceState(null,'','#'+id);scrollTo(0,0)}bs.forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.tab)));const id=location.hash.slice(1);if(ts.some(t=>t.id===id))openTab(id);</script>
+</body></html>

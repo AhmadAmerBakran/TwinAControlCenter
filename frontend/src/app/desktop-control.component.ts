@@ -15,7 +15,7 @@ import {
 type DesktopTab='windows'|'tasks'|'mixer'|'remote'|'layout';
 type FeedbackState='success'|'warning'|'error';
 type StreamPreset='max'|'balanced'|'quality';
-type TwoFingerGesture='none'|'pending'|'pinch'|'scroll';
+type TwoFingerGesture='none'|'pending'|'scroll';
 interface DesktopMonitor{ id:string;name:string;left:number;top:number;width:number;height:number;primary:boolean;screenCount:number; }
 interface PointerPoint{ x:number;y:number;startX:number;startY:number;clientX:number;clientY:number;startClientX:number;startClientY:number;startedAt:number; }
 
@@ -42,9 +42,7 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   readonly streamLatency=signal(0);
   readonly streamWidth=signal(0);
   readonly streamHeight=signal(0);
-  readonly remoteZoom=signal(1);
   readonly remoteExpanded=signal(false);
-  readonly zoomToolsVisible=signal(false);
 
   tab:DesktopTab='windows';
   windowFilter='';
@@ -70,12 +68,9 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   private lastTapAt=0;
   private lastTapPoint?:{x:number;y:number};
   private singleTapTimer?:number;
-  private pinchStartDistance=0;
-  private pinchStartZoom=1;
   private twoFingerLastY=0;
   private twoFingerStartCenterY=0;
   private twoFingerGesture:TwoFingerGesture='none';
-  private zoomHideTimer?:number;
 
   constructor(private readonly control:ControlService){}
 
@@ -166,12 +161,8 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     }catch(e){this.fail('Remote-control setting failed',e);await this.refreshSettings();}
   }
 
-  changeMonitor():void{this.resetZoom(false);this.startStream();}
+  changeMonitor():void{this.startStream();}
   changePreset():void{this.startStream();}
-  resetZoom(show=true):void{this.remoteZoom.set(1);if(show)this.showZoomTools();}
-  zoomIn():void{this.remoteZoom.set(Math.min(3,Math.round((this.remoteZoom()+0.25)*100)/100));this.showZoomTools();}
-  zoomOut():void{this.remoteZoom.set(Math.max(1,Math.round((this.remoteZoom()-0.25)*100)/100));this.showZoomTools();}
-  toggleZoomTools():void{this.zoomToolsVisible()?this.hideZoomTools():this.showZoomTools(3000);}
 
   toggleExpanded():void{
     const next=!this.remoteExpanded();
@@ -208,8 +199,6 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     }else if(this.pointers.size===2){
       this.cancelLongPress();
       const pair=[...this.pointers.values()].slice(0,2);
-      this.pinchStartDistance=this.pixelDistance(pair[0],pair[1]);
-      this.pinchStartZoom=this.remoteZoom();
       this.twoFingerLastY=(pair[0].clientY+pair[1].clientY)/2;
       this.twoFingerStartCenterY=this.twoFingerLastY;
       this.twoFingerGesture='pending';
@@ -229,23 +218,10 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     if(this.pointers.size>=2){
       this.cancelLongPress();
       const pair=[...this.pointers.values()].slice(0,2);
-      const distance=this.pixelDistance(pair[0],pair[1]);
       const centerY=(pair[0].clientY+pair[1].clientY)/2;
-      const distanceRatio=this.pinchStartDistance>0?distance/this.pinchStartDistance:1;
-      const pinchDelta=Math.abs(distanceRatio-1);
       const centerTravel=Math.abs(centerY-this.twoFingerStartCenterY);
 
-      if(this.twoFingerGesture==='pending'){
-        if(pinchDelta>=0.035)this.twoFingerGesture='pinch';
-        else if(centerTravel>=18)this.twoFingerGesture='scroll';
-      }
-
-      if(this.twoFingerGesture==='pinch'){
-        const zoom=Math.max(1,Math.min(3,this.pinchStartZoom*distanceRatio));
-        this.remoteZoom.set(Math.round(zoom*100)/100);
-        this.showZoomTools();
-        return;
-      }
+      if(this.twoFingerGesture==='pending'&&centerTravel>=18)this.twoFingerGesture='scroll';
 
       if(this.twoFingerGesture==='scroll'&&this.remoteControlEnabled()){
         const dy=centerY-this.twoFingerLastY;
@@ -282,7 +258,6 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
 
     if(wasMulti){
       if(this.pointers.size<2){
-        this.pinchStartDistance=0;
         this.twoFingerLastY=0;
         this.twoFingerStartCenterY=0;
         this.twoFingerGesture='none';
@@ -318,7 +293,7 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   remotePointerCancel(event:PointerEvent):void{
     const point=this.pointers.get(event.pointerId);
     this.pointers.delete(event.pointerId);this.cancelLongPress();
-    if(this.pointers.size<2){this.twoFingerGesture='none';this.pinchStartDistance=0;}
+    if(this.pointers.size<2){this.twoFingerGesture='none';this.twoFingerLastY=0;this.twoFingerStartCenterY=0;}
     if(this.dragging&&point&&this.remoteControlEnabled()){this.dragging=false;void this.sendInput({action:'leftup',...this.pointerCoordinates(point.x,point.y)},false);}
   }
 
@@ -466,15 +441,8 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   }
 
   private pointerCoordinates(x:number,y:number):{x:number;y:number;monitorId:string}{return{x,y,monitorId:this.remoteMonitor};}
-  private pixelDistance(a:PointerPoint,b:PointerPoint):number{return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
   private cancelLongPress():void{if(this.longPressTimer)window.clearTimeout(this.longPressTimer);this.longPressTimer=undefined;}
-  private showZoomTools(duration=1600):void{
-    this.zoomToolsVisible.set(true);
-    if(this.zoomHideTimer)window.clearTimeout(this.zoomHideTimer);
-    this.zoomHideTimer=window.setTimeout(()=>this.zoomToolsVisible.set(false),duration);
-  }
-  private hideZoomTools():void{if(this.zoomHideTimer)window.clearTimeout(this.zoomHideTimer);this.zoomHideTimer=undefined;this.zoomToolsVisible.set(false);}
-  private clearGestureTimers():void{this.cancelLongPress();this.hideZoomTools();if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);this.singleTapTimer=undefined;}
+  private clearGestureTimers():void{this.cancelLongPress();if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);this.singleTapTimer=undefined;}
 
   private async sendInput(payload:Record<string,unknown>,showFeedback:boolean):Promise<void>{
     if(!this.remoteControlEnabled()){if(showFeedback)this.notice('View-only mode','Enable remote screen control before sending input.','warning');return;}

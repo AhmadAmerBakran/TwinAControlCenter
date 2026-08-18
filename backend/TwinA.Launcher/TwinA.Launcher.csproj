@@ -7,5 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TwinA.Launcher</AssemblyName>
     <RootNamespace>TwinA.Launcher</RootNamespace>
+    <ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>
   </PropertyGroup>
 </Project>
