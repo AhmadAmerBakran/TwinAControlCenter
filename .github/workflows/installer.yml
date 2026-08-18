@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - 'feature/**'
+      - 'improve/**'
     paths:
       - 'backend/**'
       - 'frontend/**'

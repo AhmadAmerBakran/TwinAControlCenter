@@ -25,6 +25,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputRoot}
 OutputBaseFilename=TwinA-Control-Center-Setup-{#AppVersion}-win-x64
+SetupIconFile=assets\TwinA.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern dark
@@ -44,7 +45,7 @@ Name: "obs"; Description: "Install OBS Studio (optional — enables recording an
 Name: "steam"; Description: "Install Steam (optional — enables automatic Steam library/game integration)"; GroupDescription: "Companion applications:"
 Name: "discord"; Description: "Install Discord (optional — enables Discord shortcuts/integration)"; GroupDescription: "Companion applications:"
 Name: "startup"; Description: "Start TWIN A automatically when I sign in to Windows"; GroupDescription: "TWIN A startup:"; Flags: checkedonce
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: checkedonce
 
 [Files]
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}\server"; Flags: ignoreversion recursesubdirs createallsubdirs
