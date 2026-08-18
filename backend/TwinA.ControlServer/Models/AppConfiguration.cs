@@ -89,6 +89,7 @@ public sealed class UiPreferences
     public bool ConfirmPowerActions { get; set; } = true;
     public bool ProtectSystemPaths { get; set; } = true;
     public bool EnableRemoteControl { get; set; }
+    public bool KeepScreenAwake { get; set; } = true;
     public List<HomeCardPreference> HomeCards { get; set; } = HomeCardPreference.CreateDefaults();
 }
 

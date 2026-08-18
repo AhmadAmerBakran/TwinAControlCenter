@@ -79,7 +79,7 @@ export interface AppSettings {
   devProjects:DevProject[];
   flows:FlowConfig[];
   mqtt:{enabled:boolean;host:string;port:number;tls:boolean;username:string;devices:MqttDevice[]};
-  ui:{confirmPowerActions:boolean;protectSystemPaths:boolean;enableRemoteControl:boolean;homeCards:HomeCardPreference[]};
+  ui:{confirmPowerActions:boolean;protectSystemPaths:boolean;enableRemoteControl:boolean;keepScreenAwake:boolean;homeCards:HomeCardPreference[]};
 }
 export interface SettingsEnvelope { version:string; settings:AppSettings; configPath:string; obsPasswordStored:boolean; mqttPasswordStored:boolean; }
 

@@ -3,12 +3,13 @@ import { AfterViewInit, ApplicationRef, Component, ComponentRef, EnvironmentInje
 import { FormsModule } from '@angular/forms';
 import {
   AppSettings, AudioDevice, ControlService, DesktopRuntime, DevProject, DevStatus, DriveInfo, FileEntry,
-  FlowConfig, GameInfo, GameProfile, MqttDevice, MqttDeviceState, SettingsEnvelope, SoundInfo, SystemDetails
+  FlowConfig, FlowStep, GameInfo, GameProfile, MqttDevice, MqttDeviceState, SettingsEnvelope, SoundInfo, SystemDetails
 } from './core/control.service';
 import { DesktopControlComponent } from './desktop-control.component';
 
 type Page='home'|'studio'|'audio'|'games'|'system'|'desktop'|'files'|'dev'|'iot'|'automations'|'settings';
 interface Toast{title:string;detail:string;status:'success'|'warning'|'error';}
+interface FlowStepPreset{key:string;label:string;group:string;description:string;command:string;payload:Record<string,string>;}
 
 @Component({selector:'ta-root',standalone:true,imports:[CommonModule,FormsModule],templateUrl:'./app.component.html',styleUrl:'./app.component.css'})
 export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
@@ -24,6 +25,32 @@ export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
   readonly drives=signal<DriveInfo[]>([]); readonly fileEntries=signal<FileEntry[]>([]); currentPath=''; fileBusy=false;
   readonly projects=signal<DevProject[]>([]); readonly devStatus=signal<DevStatus|null>(null); devSelected=''; devOutput=''; devEditorOpen=false; devDraft:DevProject=this.blankProject();
   readonly flows=signal<FlowConfig[]>([]); flowEditorOpen=false; flowDraft:FlowConfig=this.blankFlow();
+  readonly flowStepPresets:FlowStepPreset[]=[
+    {key:'obs-open',group:'Apps',label:'Open OBS Studio',description:'Launch OBS and verify that its process is running.',command:'app.launch',payload:{app:'obs'}},
+    {key:'steam-open',group:'Apps',label:'Open Steam',description:'Launch Steam.',command:'app.launch',payload:{app:'steam'}},
+    {key:'discord-open',group:'Apps',label:'Open Discord',description:'Launch Discord.',command:'app.launch',payload:{app:'discord'}},
+    {key:'taskmgr-open',group:'Apps',label:'Open Task Manager',description:'Open Windows Task Manager on the PC.',command:'app.launch',payload:{app:'taskmgr'}},
+    {key:'steam-library',group:'Apps',label:'Open Steam Library',description:'Open Steam directly to Library.',command:'game.library.open',payload:{}},
+    {key:'record-start',group:'OBS',label:'Start recording',description:'Ensure OBS recording is on.',command:'obs.record.start',payload:{}},
+    {key:'record-stop',group:'OBS',label:'Stop recording',description:'Ensure OBS recording is off.',command:'obs.record.stop',payload:{}},
+    {key:'record-pause',group:'OBS',label:'Pause / resume recording',description:'Toggle the current OBS recording pause state.',command:'obs.record.pause',payload:{}},
+    {key:'replay-start',group:'OBS',label:'Start Replay Buffer',description:'Ensure the OBS Replay Buffer is on.',command:'obs.replay.start',payload:{}},
+    {key:'replay-stop',group:'OBS',label:'Stop Replay Buffer',description:'Ensure the OBS Replay Buffer is off.',command:'obs.replay.stop',payload:{}},
+    {key:'replay-save',group:'OBS',label:'Save replay clip',description:'Save the current OBS Replay Buffer clip.',command:'obs.replay.save',payload:{}},
+    {key:'mic-toggle',group:'OBS',label:'Toggle microphone mute',description:'Mute or unmute the configured OBS microphone input.',command:'obs.mic.toggle',payload:{}},
+    {key:'desktop-audio-toggle',group:'OBS',label:'Toggle desktop audio mute',description:'Mute or unmute the configured OBS desktop audio input.',command:'obs.desktop.toggle',payload:{}},
+    {key:'volume-25',group:'Audio',label:'Set volume to 25%',description:'Set Windows master volume to 25%.',command:'audio.master.set',payload:{value:'25'}},
+    {key:'volume-50',group:'Audio',label:'Set volume to 50%',description:'Set Windows master volume to 50%.',command:'audio.master.set',payload:{value:'50'}},
+    {key:'volume-75',group:'Audio',label:'Set volume to 75%',description:'Set Windows master volume to 75%.',command:'audio.master.set',payload:{value:'75'}},
+    {key:'volume-100',group:'Audio',label:'Set volume to 100%',description:'Set Windows master volume to 100%.',command:'audio.master.set',payload:{value:'100'}},
+    {key:'volume-mute',group:'Audio',label:'Mute / unmute Windows audio',description:'Toggle Windows master mute.',command:'audio.master.mute',payload:{}},
+    {key:'screenshot',group:'Windows',label:'Take screenshot',description:'Capture the Windows desktop and verify the saved file.',command:'windows.screenshot',payload:{}},
+    {key:'show-desktop',group:'Windows',label:'Show desktop',description:'Send Win + D to show the Windows desktop.',command:'windows.desktop.show',payload:{}},
+    {key:'lock-pc',group:'Windows',label:'Lock PC',description:'Lock the current Windows session.',command:'windows.lock',payload:{}},
+    {key:'discord-mute',group:'Discord',label:'Toggle mute',description:'Send Discord mute toggle. Discord does not expose reliable final-state readback.',command:'discord.mute.toggle',payload:{}},
+    {key:'discord-deafen',group:'Discord',label:'Toggle deafen',description:'Send Discord deafen toggle. Discord does not expose reliable final-state readback.',command:'discord.deafen.toggle',payload:{}}
+  ];
+  flowPresetToAdd='obs-open';
   readonly settingsEnvelope=signal<SettingsEnvelope|null>(null); readonly iotStates=signal<MqttDeviceState[]>([]); iotMessage=''; iotDeviceEditorOpen=false; iotDeviceDraft:MqttDevice=this.blankMqttDevice();
 
   private desktopComponent?:ComponentRef<DesktopControlComponent>;
@@ -112,16 +139,20 @@ export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
   // FLOWS
   async refreshFlows():Promise<void>{try{this.flows.set(await this.control.get<FlowConfig[]>('/api/flows'));}catch(e){this.showToast('Flows refresh failed',this.err(e),'error');}}
   async runFlow(flow:FlowConfig):Promise<void>{const r=await this.control.execute('flow.run',{id:flow.id});this.showToast(r.ok?(r.verified?'Flow verified':'Flow completed with warnings'):'Flow failed',r.message,r.ok?(r.verified?'success':'warning'):'error');this.devOutput=r.data||'';}
-  openFlowEditor(flow?:FlowConfig):void{this.flowDraft=flow?structuredClone(flow):this.blankFlow();this.flowEditorOpen=true;}
-  addFlowStep():void{this.flowDraft.steps.push({command:'app.launch',payload:{app:'obs'},delayAfterMs:0,continueOnError:false});}
+  openFlowEditor(flow?:FlowConfig):void{this.flowDraft=flow?structuredClone(flow):this.blankFlow();this.flowPresetToAdd='obs-open';this.flowEditorOpen=true;}
+  addFlowStep():void{const preset=this.flowStepPresets.find(p=>p.key===this.flowPresetToAdd)??this.flowStepPresets[0];this.flowDraft.steps.push({command:preset.command,payload:structuredClone(preset.payload),delayAfterMs:0,continueOnError:false});}
   removeFlowStep(i:number):void{this.flowDraft.steps.splice(i,1);}
-  payloadText(step:any):string{return Object.entries(step.payload||{}).map(([k,v])=>`${k}=${v}`).join('; ');}
-  setPayloadText(step:any,value:string):void{const payload:Record<string,string>={};for(const pair of value.split(';')){const idx=pair.indexOf('=');if(idx>0)payload[pair.slice(0,idx).trim()]=pair.slice(idx+1).trim();}step.payload=payload;}
+  flowPresetKey(step:FlowStep):string{return this.flowStepPresets.find(p=>p.command===step.command&&this.sameFlowPayload(p.payload,step.payload||{}))?.key??'__custom__';}
+  setFlowPreset(step:FlowStep,key:string):void{if(key==='__custom__')return;const preset=this.flowStepPresets.find(p=>p.key===key);if(!preset)return;step.command=preset.command;step.payload=structuredClone(preset.payload);}
+  flowStepLabel(step:FlowStep):string{const key=this.flowPresetKey(step);return this.flowStepPresets.find(p=>p.key===key)?.label??step.command;}
+  flowStepDescription(step:FlowStep):string{const key=this.flowPresetKey(step);return this.flowStepPresets.find(p=>p.key===key)?.description??'Custom step. Review its command and payload under Advanced.';}
+  payloadText(step:FlowStep):string{return Object.entries(step.payload||{}).map(([k,v])=>`${k}=${v}`).join('; ');}
+  setPayloadText(step:FlowStep,value:string):void{const payload:Record<string,string>={};for(const pair of value.split(';')){const idx=pair.indexOf('=');if(idx>0)payload[pair.slice(0,idx).trim()]=pair.slice(idx+1).trim();}step.payload=payload;}
   async saveFlow():Promise<void>{await this.control.post('/api/flows',this.flowDraft);this.flowEditorOpen=false;await this.refreshFlows();this.showToast('Flow saved',this.flowDraft.name,'success');}
   async deleteFlow(flow:FlowConfig):Promise<void>{if(!confirm(`Delete flow '${flow.name}'?`))return;await this.control.delete(`/api/flows/${flow.id}`);await this.refreshFlows();}
 
   // SETTINGS + IOT
-  async refreshSettings():Promise<void>{try{this.settingsEnvelope.set(await this.control.get<SettingsEnvelope>('/api/settings'));this.applyHomeLayout();}catch(e){this.showToast('Settings failed',this.err(e),'error');}}
+  async refreshSettings():Promise<void>{try{this.settingsEnvelope.set(await this.control.get<SettingsEnvelope>('/api/settings'));this.applyHomeLayout();this.syncWakeLockPreference();}catch(e){this.showToast('Settings failed',this.err(e),'error');}}
   async saveSettings():Promise<void>{const env=this.settingsEnvelope();if(!env)return;try{await this.control.put('/api/settings',env.settings);await this.refreshSettings();this.showToast('Settings saved',`Configuration written to ${this.settingsEnvelope()?.configPath}`,'success');}catch(e){this.showToast('Settings save failed',this.err(e),'error');}}
   async testIot():Promise<void>{try{const r:any=await this.control.post('/api/iot/test',{});this.iotMessage=r.message;this.showToast(r.verified?'MQTT verified':'MQTT connected',r.message,r.verified?'success':'warning');await this.refreshIotStates();}catch(e){this.iotMessage=this.err(e);this.showToast('MQTT connection failed',this.iotMessage,'error');}}
   async refreshIotStates():Promise<void>{try{this.iotStates.set(await this.control.get<MqttDeviceState[]>('/api/iot/states'));}catch{this.iotStates.set([]);}}
@@ -131,7 +162,10 @@ export class AppComponent implements OnInit,AfterViewInit,OnDestroy {
   async deleteIotDevice(device:MqttDevice):Promise<void>{if(!confirm(`Remove IoT device '${device.name}'?`))return;const env=this.settingsEnvelope();if(!env)return;env.settings.mqtt.devices=env.settings.mqtt.devices.filter(d=>d.id!==device.id);await this.saveSettings();await this.refreshIotStates();}
   async toggleIotDevice(device:MqttDevice,on:boolean):Promise<void>{await this.run('iot.toggle',{id:device.id,on},`${device.name} ${on?'ON':'OFF'}`);await this.refreshIotStates();}
   setMqtt(field:'enabled'|'host'|'port'|'tls'|'username',value:any):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.mqtt as any)[field]=field==='port'?Number(value):value;this.settingsEnvelope.set({...env,settings:{...env.settings,mqtt:{...env.settings.mqtt}}});}
-  setUi(field:'confirmPowerActions'|'protectSystemPaths'|'enableRemoteControl',value:boolean):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.ui as any)[field]=value;this.settingsEnvelope.set({...env,settings:{...env.settings,ui:{...env.settings.ui}}});}
+  setUi(field:'confirmPowerActions'|'protectSystemPaths'|'enableRemoteControl'|'keepScreenAwake',value:boolean):void{const env=this.settingsEnvelope();if(!env)return;(env.settings.ui as any)[field]=value;this.settingsEnvelope.set({...env,settings:{...env.settings,ui:{...env.settings.ui}}});if(field==='keepScreenAwake')this.syncWakeLockPreference();}
+
+  private syncWakeLockPreference():void{const enabled=this.settingsEnvelope()?.settings.ui.keepScreenAwake??true;try{localStorage.setItem('twina.keepScreenAwake',String(enabled));}catch{}window.dispatchEvent(new CustomEvent('twina-wake-lock-preference',{detail:{enabled}}));}
+  private sameFlowPayload(a:Record<string,string>,b:Record<string,string>):boolean{const ak=Object.keys(a).sort();const bk=Object.keys(b).sort();return ak.length===bk.length&&ak.every((key,i)=>key===bk[i]&&String(a[key])===String(b[key]));}
 
   sourceIcon(name:string):string{const v=name.toLowerCase();if(v.includes('mic'))return'🎙';if(v.includes('desktop'))return'◖';if(v.includes('game'))return'◇';return'◉';}
   formatDb(value:number):string{if(!Number.isFinite(value))return'—';const r=Math.round(value*10)/10;return`${r>0?'+':''}${r.toFixed(1)} dB`;}
