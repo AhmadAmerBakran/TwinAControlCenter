@@ -28,6 +28,7 @@ OutputBaseFilename=TwinA-Control-Center-Setup-{#AppVersion}-win-x64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern dark
+SetupIconFile=assets\TwinA.ico
 UninstallDisplayIcon={app}\launcher\{#AppExeName}
 SetupLogging=yes
 CloseApplications=yes
@@ -55,10 +56,11 @@ Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion skipifso
 Source: "{#SourceRoot}\install-dependencies.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"
-Name: "{autoprograms}\TWIN A - Configure iPad Access"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; WorkingDir: "{app}\launcher"
-Name: "{autoprograms}\TWIN A - Read Me"; Filename: "{app}\README.md"
-Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; Tasks: desktopicon
+Name: "{autoprograms}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"
+Name: "{autoprograms}\TWIN A - Configure iPad Access"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"
+Name: "{autoprograms}\TWIN A - Help Center"; Filename: "{app}\server\wwwroot\help\index.html"; IconFilename: "{app}\launcher\{#AppExeName}"
+Name: "{autoprograms}\TWIN A - Read Me"; Filename: "{app}\README.md"; IconFilename: "{app}\launcher\{#AppExeName}"
+Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TwinAControlCenter"; ValueData: """{app}\launcher\{#AppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
@@ -69,6 +71,7 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Steam"; StatusMsg: "Installing Steam if needed..."; Flags: runhidden waituntilterminated; Tasks: steam
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Discord"; StatusMsg: "Installing Discord if needed..."; Flags: runhidden waituntilterminated; Tasks: discord
 Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; Description: "Start TWIN A and configure private iPad access"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\server\wwwroot\help\index.html"; Description: "Open the TWIN A Help Center"; Flags: shellexec postinstall skipifsilent unchecked
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/IM TwinA.Launcher.exe /T /F"; Flags: runhidden; RunOnceId: "StopTwinALauncher"
