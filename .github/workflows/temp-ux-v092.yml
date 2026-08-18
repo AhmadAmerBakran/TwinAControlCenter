@@ -1,0 +1,46 @@
+name: Temporary UX 0.9.2 maintenance
+
+on:
+  push:
+    branches:
+      - improve/ux-flows-icon-0.9.2
+    paths:
+      - 'scripts/apply-ux-v092.py'
+      - '.github/workflows/temp-ux-v092.yml'
+      - '.ux-v092-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install icon tooling
+        shell: powershell
+        run: python -m pip install --disable-pip-version-check pillow
+
+      - name: Apply TWIN A UX update
+        shell: powershell
+        run: python .\scripts\apply-ux-v092.py
+
+      - name: Commit final changes
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/temp-ux-v092.yml scripts/apply-ux-v092.py scripts/apply-ux-v092.ps1 .ux-v092-trigger
+          git add -A
+          git commit -m "Improve installer icon and everyday UX"
+          git push
