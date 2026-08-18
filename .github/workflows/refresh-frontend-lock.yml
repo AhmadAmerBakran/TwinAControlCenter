@@ -35,7 +35,10 @@ jobs:
 
       - name: Refresh package lock
         working-directory: frontend
-        run: npm install --package-lock-only --ignore-scripts --no-audit
+        shell: bash
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --ignore-scripts --no-audit
 
       - name: Commit refreshed lock
         shell: bash
