@@ -38,15 +38,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
@@ -75,8 +75,12 @@ jobs:
           }
           .\scripts\package-installer.ps1 -Version $version
 
+      - name: Installer smoke test
+        shell: powershell
+        run: .\scripts\installer-smoke-test.ps1
+
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: TWIN-A-Control-Center-Installer
           path: artifacts/installer/*.exe
