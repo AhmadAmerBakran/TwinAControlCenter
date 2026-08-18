@@ -22,10 +22,12 @@ $desktopTs = Get-Content (Join-Path $Root 'frontend\src\app\desktop-control.comp
 $desktopHtml = Get-Content (Join-Path $Root 'frontend\src\app\desktop-control.component.html') -Raw
 $remoteCss = Get-Content (Join-Path $Root 'frontend\src\app\remote-v08.css') -Raw
 $appIndex = Get-Content (Join-Path $Root 'frontend\src\index.html') -Raw
+$appHtml = Get-Content (Join-Path $Root 'frontend\src\app\app.component.html') -Raw
 $installerScript = Get-Content (Join-Path $Root 'installer\TwinAControlCenter.iss') -Raw
 $launcherProject = Get-Content (Join-Path $Root 'backend\TwinA.Launcher\TwinA.Launcher.csproj') -Raw
 $serverProject = Get-Content (Join-Path $Root 'backend\TwinA.ControlServer\TwinA.ControlServer.csproj') -Raw
 $agentProject = Get-Content (Join-Path $Root 'backend\TwinA.DesktopAgent\TwinA.DesktopAgent.csproj') -Raw
+$packageVersion = (Get-Content (Join-Path $Root 'frontend\package.json') -Raw | ConvertFrom-Json).version
 
 foreach ($forbidden in @('remoteZoom', 'zoomToolsVisible', 'pinchStartDistance', 'pinchStartZoom')) {
     Assert-True (-not $desktopTs.Contains($forbidden)) "Removed zoom identifier is still present: $forbidden"
@@ -38,7 +40,10 @@ Assert-True ($serverProject.Contains('<ApplicationIcon>..\..\installer\assets\Tw
 Assert-True ($agentProject.Contains('<ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>')) 'Desktop Agent is not configured to embed the TWIN A application icon.'
 Assert-True ($installerScript.Contains('SetupIconFile=assets\TwinA.ico')) 'Installer executable is not configured with the TWIN A icon.'
 Assert-True ($installerScript.Contains('TWIN A - Help Center')) 'Installer does not expose the offline TWIN A Help Center shortcut.'
-Assert-True ($appIndex.Contains('<b>HELP</b>')) 'The Control Center does not expose the visible Help Center launcher.'
+Assert-True (-not $appIndex.Contains('twina-help-launcher')) 'The old floating Help launcher is still present in index.html.'
+Assert-True ($appHtml.Contains('class="rail-help"')) 'The Control Center does not expose the docked Help Center button.'
+Assert-True ($installerScript.Contains('DestName: "TwinA-{#AppVersion}.ico"')) 'Installer does not install a versioned standalone shortcut icon.'
+Assert-True ($installerScript.Contains('IconFilename: "{app}\assets\TwinA-{#AppVersion}.ico"')) 'Installer shortcuts do not point to the standalone TWIN A icon.'
 
 $installRoot = Join-Path $env:TEMP 'TwinAControlCenter-CI-Install'
 Remove-Item $installRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -59,11 +64,22 @@ $launcher = Join-Path $installRoot 'launcher\TwinA.Launcher.exe'
 $server = Join-Path $installRoot 'server\TwinA.ControlServer.exe'
 $agent = Join-Path $installRoot 'agent\TwinA.DesktopAgent.exe'
 $help = Join-Path $installRoot 'server\wwwroot\help\index.html'
+$installedIcon = Join-Path $installRoot "assets\TwinA-$packageVersion.ico"
 
 Assert-True (Test-Path $launcher -PathType Leaf) 'Installed launcher executable is missing.'
 Assert-True (Test-Path $server -PathType Leaf) 'Installed Control Server executable is missing.'
 Assert-True (Test-Path $agent -PathType Leaf) 'Installed Desktop Agent executable is missing.'
 Assert-True (Test-Path $help -PathType Leaf) 'Installed Help Center is missing.'
+Assert-True (Test-Path $installedIcon -PathType Leaf) 'Installed standalone TWIN A shortcut icon is missing.'
+
+# An ICO starts with reserved=0, type=1 and image-count. A broad size set prevents Windows
+# from stretching/caching one tiny frame for the desktop shortcut.
+$iconBytes = [IO.File]::ReadAllBytes($installedIcon)
+Assert-True ($iconBytes.Length -gt 6) 'Installed TWIN A shortcut icon is empty or truncated.'
+Assert-True ([BitConverter]::ToUInt16($iconBytes, 0) -eq 0) 'Installed TWIN A shortcut icon has an invalid ICO header.'
+Assert-True ([BitConverter]::ToUInt16($iconBytes, 2) -eq 1) 'Installed TWIN A shortcut icon is not an ICO resource.'
+$iconFrameCount = [BitConverter]::ToUInt16($iconBytes, 4)
+Assert-True ($iconFrameCount -ge 8) "Installed TWIN A shortcut icon has only $iconFrameCount frame(s); expected a full multi-resolution icon."
 
 $helpText = Get-Content $help -Raw
 Assert-True ($helpText.Contains('TWIN A Help Center')) 'Installed Help Center content is invalid.'
@@ -112,6 +128,12 @@ $shortcutTarget = [IO.Path]::GetFullPath($desktopShortcut.TargetPath)
 $expectedTarget = [IO.Path]::GetFullPath($launcher)
 Assert-True ($shortcutTarget.Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCase)) "Desktop shortcut target is incorrect: $shortcutTarget"
 
+$desktopIconPath = ($desktopShortcut.IconLocation -replace ',\s*\d+$', '').Trim('"')
+Assert-True (-not [string]::IsNullOrWhiteSpace($desktopIconPath)) 'Desktop shortcut does not have an explicit icon location.'
+$desktopIconPath = [IO.Path]::GetFullPath($desktopIconPath)
+$expectedIconPath = [IO.Path]::GetFullPath($installedIcon)
+Assert-True ($desktopIconPath.Equals($expectedIconPath, [StringComparison]::OrdinalIgnoreCase)) "Desktop shortcut icon path is incorrect: $desktopIconPath"
+
 $helpShortcutName = 'TWIN A - Help Center.lnk'
 $programCandidates = @(
     [Environment]::GetFolderPath('Programs'),
@@ -132,8 +154,9 @@ Assert-True ($helpShortcutTarget.Equals($expectedHelpTarget, [StringComparison]:
 Write-Host 'Installer smoke test passed:' -ForegroundColor Green
 Write-Host ' - core executables installed' -ForegroundColor Green
 Write-Host ' - installer and all app executables expose TWIN A icons' -ForegroundColor Green
+Write-Host " - standalone shortcut icon has $iconFrameCount resolutions and is used by the desktop shortcut" -ForegroundColor Green
 Write-Host ' - built-in multi-topic Help Center installed' -ForegroundColor Green
-Write-Host ' - visible in-app Help launcher verified' -ForegroundColor Green
+Write-Host ' - docked in-app Help button verified' -ForegroundColor Green
 Write-Host ' - Help Center Start Menu shortcut created and verified' -ForegroundColor Green
 Write-Host ' - Remote Screen zoom controls absent' -ForegroundColor Green
 Write-Host ' - two-finger scroll retained' -ForegroundColor Green
