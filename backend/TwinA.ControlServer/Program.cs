@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Json;
 using TwinA.ControlServer.Hubs;
@@ -14,6 +15,7 @@ builder.Services.AddSingleton<ProcessRunner>();
 builder.Services.AddSingleton<SessionMarkerService>();
 builder.Services.AddSingleton<DesktopAgentClient>();
 builder.Services.AddSingleton<DesktopV07Client>();
+builder.Services.AddSingleton<DesktopFrameStreamClient>();
 builder.Services.AddSingleton<ObsWebSocketClient>();
 builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<DesktopControlService>();
@@ -27,6 +29,7 @@ builder.Services.AddSingleton<CommandDispatcher>();
 builder.Services.AddHostedService<SystemTelemetryService>();
 
 var app = builder.Build();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 
 app.Use(async (ctx, next) =>
 {
@@ -38,7 +41,7 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
-app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.7.0-dev", time = DateTimeOffset.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "TWIN A Control Server", version = "0.9.0-dev", time = DateTimeOffset.UtcNow }));
 app.MapGet("/api/state", (ControlState state) => state.Snapshot);
 app.MapPost("/api/commands/{command}", async (string command, HttpRequest request, CommandDispatcher dispatcher, CancellationToken ct) =>
 {
@@ -62,13 +65,15 @@ app.MapPost("/api/sounds/upload", async (HttpRequest request, string fileName, S
 });
 app.MapDelete("/api/sounds/{id}", (string id, SoundboardService sounds) => sounds.Delete(id) ? Results.Ok(new { ok=true }) : Results.BadRequest(new { ok=false }));
 
-// DESKTOP v0.7 - real state, window/task manager, per-app audio and private remote desktop.
+// DESKTOP v0.9 - live state, tasks, app audio, monitor-aware remote desktop and high-rate binary streaming.
 app.MapGet("/api/desktop/runtime", async (DesktopControlService desktop, CancellationToken ct) =>
     DesktopControlService.JsonData(await desktop.RuntimeAsync(ct)));
 app.MapGet("/api/desktop/windows", async (DesktopControlService desktop, CancellationToken ct) =>
     DesktopControlService.JsonData(await desktop.WindowsAsync(ct)));
 app.MapGet("/api/desktop/processes", async (DesktopControlService desktop, CancellationToken ct) =>
     DesktopControlService.JsonData(await desktop.ProcessesAsync(ct)));
+app.MapGet("/api/desktop/monitors", async (DesktopControlService desktop, CancellationToken ct) =>
+    DesktopControlService.JsonData(await desktop.MonitorsAsync(ct)));
 app.MapGet("/api/desktop/audio-sessions", async (DesktopControlService desktop, CancellationToken ct) =>
     DesktopControlService.JsonData(await desktop.AudioSessionsAsync(ct)));
 app.MapPost("/api/desktop/window/action", async (DesktopWindowActionRequest request, DesktopControlService desktop, CancellationToken ct) =>
@@ -86,9 +91,9 @@ app.MapPost("/api/desktop/audio-session", async (DesktopAudioSessionRequest requ
     var result = await desktop.SetAudioSessionAsync(request.Pid, request.Volume, request.Muted, ct);
     return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
 });
-app.MapGet("/api/desktop/frame", async (int? maxWidth, int? quality, DesktopControlService desktop, CancellationToken ct) =>
+app.MapGet("/api/desktop/frame", async (string? monitorId, int? maxWidth, int? quality, DesktopControlService desktop, CancellationToken ct) =>
 {
-    var result = await desktop.CaptureFrameAsync(maxWidth ?? 1600, quality ?? 62, ct);
+    var result = await desktop.CaptureFrameAsync(monitorId, maxWidth ?? 1600, quality ?? 62, ct);
     return result.Ok && result.Bytes is not null
         ? Results.File(result.Bytes, "image/jpeg", enableRangeProcessing: false)
         : Results.Problem(result.Message, statusCode: 503);
@@ -97,6 +102,40 @@ app.MapPost("/api/desktop/input", async (DesktopInputRequest request, DesktopCon
 {
     var result = await desktop.InputAsync(request, ct);
     return result.Ok ? Results.Ok(result) : Results.BadRequest(result);
+});
+app.MapGet("/ws/desktop", async (HttpContext context, DesktopFrameStreamClient streamClient) =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsync("A WebSocket connection is required.");
+        return;
+    }
+
+    static int QueryInt(HttpContext ctx, string key, int fallback)
+        => int.TryParse(ctx.Request.Query[key], out var value) ? value : fallback;
+
+    var monitorId = context.Request.Query["monitorId"].ToString();
+    var options = new DesktopStreamOptions(
+        string.IsNullOrWhiteSpace(monitorId) ? "all" : monitorId,
+        QueryInt(context, "maxWidth", 1600),
+        QueryInt(context, "quality", 58),
+        QueryInt(context, "fps", 60));
+
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    try
+    {
+        await streamClient.RelayAsync(socket, options, context.RequestAborted);
+    }
+    catch (OperationCanceledException) { }
+    catch (Exception ex)
+    {
+        if (socket.State == WebSocketState.Open)
+        {
+            var reason = ex.Message.Length > 120 ? ex.Message[..120] : ex.Message;
+            await socket.CloseAsync(WebSocketCloseStatus.InternalServerError, reason, CancellationToken.None);
+        }
+    }
 });
 
 // GAMES
@@ -146,7 +185,7 @@ app.MapDelete("/api/games/profile/{gameId}", (string gameId, SettingsStore setti
 // SYSTEM
 app.MapGet("/api/system/details", (SystemInfoService system) => Results.Ok(system.GetDetails()));
 
-// FILES - all ready fixed/removable drives are browsable; protected OS paths are read-only by default.
+// FILES
 app.MapGet("/api/files/drives", (FileWorkspaceService files) => Results.Ok(files.GetDrives()));
 app.MapGet("/api/files/browse", (string path, FileWorkspaceService files) => Results.Ok(files.Browse(path)));
 app.MapGet("/api/files/download", (string path, FileWorkspaceService files) =>
@@ -187,7 +226,7 @@ app.MapPost("/api/flows", async (HttpRequest request, SettingsStore settings, Ca
 app.MapDelete("/api/flows/{id}", (string id, SettingsStore settings) => settings.Update(config => config.Flows.RemoveAll(f => f.Id.Equals(id,StringComparison.OrdinalIgnoreCase))>0) ? Results.Ok(new{ok=true}) : Results.NotFound());
 app.MapGet("/api/settings", (SettingsStore settings) => Results.Ok(new
 {
-    version = "0.7.0-dev",
+    version = "0.9.0-dev",
     settings = settings.Get(),
     configPath = settings.ConfigPath,
     obsPasswordStored = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("TWINA_OBS_PASSWORD")),
@@ -199,7 +238,7 @@ app.MapPut("/api/settings", async (HttpRequest request, SettingsStore settings, 
     return Results.Ok(settings.Replace(config));
 });
 
-// IoT: real MQTT authentication/publish/state verification when a broker is configured.
+// IoT
 app.MapPost("/api/iot/test", async (MqttRuntimeService mqtt, CancellationToken ct) =>
 {
     var result = await mqtt.TestAsync(ct);

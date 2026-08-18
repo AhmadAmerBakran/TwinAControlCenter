@@ -14,6 +14,10 @@ import {
 
 type DesktopTab='windows'|'tasks'|'mixer'|'remote'|'layout';
 type FeedbackState='success'|'warning'|'error';
+type StreamPreset='max'|'balanced'|'quality';
+type TwoFingerGesture='none'|'pending'|'scroll';
+interface DesktopMonitor{ id:string;name:string;left:number;top:number;width:number;height:number;primary:boolean;screenCount:number; }
+interface PointerPoint{ x:number;y:number;startX:number;startY:number;clientX:number;clientY:number;startClientX:number;startClientY:number;startedAt:number; }
 
 @Component({
   selector:'ta-desktop-control',
@@ -23,26 +27,50 @@ type FeedbackState='success'|'warning'|'error';
   styleUrl:'./desktop-control.component.css'
 })
 export class DesktopControlComponent implements OnInit,OnDestroy {
-  @ViewChild('remoteImage') remoteImage?:ElementRef<HTMLImageElement>;
+  @ViewChild('remoteCanvas') remoteCanvas?:ElementRef<HTMLCanvasElement>;
 
   readonly runtime=signal<DesktopRuntime|null>(null);
   readonly windows=signal<DesktopWindow[]>([]);
   readonly processes=signal<DesktopProcess[]>([]);
   readonly audioSessions=signal<AppAudioSession[]>([]);
+  readonly monitors=signal<DesktopMonitor[]>([]);
   readonly settings=signal<SettingsEnvelope|null>(null);
   readonly feedback=signal<{state:FeedbackState;title:string;detail:string}|null>(null);
   readonly loading=signal(false);
+  readonly streamState=signal<'off'|'connecting'|'live'|'error'>('off');
+  readonly streamFps=signal(0);
+  readonly streamLatency=signal(0);
+  readonly streamWidth=signal(0);
+  readonly streamHeight=signal(0);
+  readonly remoteExpanded=signal(false);
 
   tab:DesktopTab='windows';
   windowFilter='';
   processFilter='';
-  remoteFrameUrl='';
   remoteText='';
+  remoteMonitor='all';
+  remotePreset:StreamPreset='max';
+
   private pollTimer?:number;
-  private frameTimer?:number;
+  private ws?:WebSocket;
+  private reconnectTimer?:number;
+  private pendingFrame?:ArrayBuffer;
+  private rendering=false;
+  private frameCounter=0;
+  private frameWindowStart=performance.now();
   private refreshing=false;
+  private readonly pointers=new Map<number,PointerPoint>();
   private dragging=false;
+  private dragStart?:{x:number;y:number};
   private lastMoveAt=0;
+  private longPressTimer?:number;
+  private longPressTriggered=false;
+  private lastTapAt=0;
+  private lastTapPoint?:{x:number;y:number};
+  private singleTapTimer?:number;
+  private twoFingerLastY=0;
+  private twoFingerStartCenterY=0;
+  private twoFingerGesture:TwoFingerGesture='none';
 
   constructor(private readonly control:ControlService){}
 
@@ -53,12 +81,14 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
 
   ngOnDestroy():void{
     if(this.pollTimer)window.clearInterval(this.pollTimer);
-    this.stopFrames();
+    this.stopStream();
+    this.clearGestureTimers();
+    document.body.classList.remove('twina-remote-expanded');
   }
 
   setTab(tab:DesktopTab):void{
     this.tab=tab;
-    if(tab==='remote')this.startFrames();else this.stopFrames();
+    if(tab==='remote')queueMicrotask(()=>this.startStream());else this.stopStream();
     void this.pollVisibleState(true);
   }
 
@@ -77,7 +107,7 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   async refreshEverything():Promise<void>{
     this.loading.set(true);
     try{
-      await Promise.allSettled([this.refreshRuntime(),this.refreshWindows(),this.refreshProcesses(),this.refreshAudio(),this.refreshSettings()]);
+      await Promise.allSettled([this.refreshRuntime(),this.refreshWindows(),this.refreshProcesses(),this.refreshAudio(),this.refreshSettings(),this.refreshMonitors()]);
     }finally{this.loading.set(false);}
   }
 
@@ -127,80 +157,183 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
     try{
       await this.control.put('/api/settings',envelope.settings);
       await this.refreshSettings();
-      this.notice(enabled?'Remote control enabled':'Remote control disabled',enabled?'Screen interaction is enabled. Input commands remain reported as state-unverified because Windows cannot prove what an application did with each input event.':'Remote desktop remains view-only.','success');
+      this.notice(enabled?'Remote control enabled':'Remote control disabled',enabled?'Mouse, touch gestures and keyboard shortcuts are enabled. Input remains state-unverified because Windows cannot prove what an application did with each input event.':'Remote desktop remains view-only.','success');
     }catch(e){this.fail('Remote-control setting failed',e);await this.refreshSettings();}
   }
 
+  changeMonitor():void{this.startStream();}
+  changePreset():void{this.startStream();}
+
+  toggleExpanded():void{
+    const next=!this.remoteExpanded();
+    this.remoteExpanded.set(next);
+    document.body.classList.toggle('twina-remote-expanded',next);
+    queueMicrotask(()=>this.focusRemoteCanvas());
+  }
+
+  presetLabel():string{
+    return this.remotePreset==='max'?'MAX FPS · 60 target':this.remotePreset==='balanced'?'BALANCED · 45 target':'HIGH QUALITY · 30 target';
+  }
+
+  selectedMonitor():DesktopMonitor|undefined{return this.monitors().find(m=>m.id===this.remoteMonitor);}
+
   remotePointerDown(event:PointerEvent):void{
-    if(!this.remoteControlEnabled())return;
-    event.preventDefault();this.dragging=true;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-    const p=this.pointerPosition(event);void this.sendInput({action:'leftdown',...p},false);
+    event.preventDefault();
+    const canvas=event.currentTarget as HTMLElement;
+    canvas.setPointerCapture?.(event.pointerId);
+    const pos=this.pointerPosition(event);
+    this.pointers.set(event.pointerId,{...pos,startX:pos.x,startY:pos.y,clientX:event.clientX,clientY:event.clientY,startClientX:event.clientX,startClientY:event.clientY,startedAt:performance.now()});
+
+    if(this.pointers.size===1){
+      this.longPressTriggered=false;
+      this.dragStart=pos;
+      if(this.remoteControlEnabled()){
+        if(this.longPressTimer)window.clearTimeout(this.longPressTimer);
+        this.longPressTimer=window.setTimeout(()=>{
+          const point=this.pointers.get(event.pointerId);
+          if(!point||this.dragging||this.pointers.size!==1||!this.remoteControlEnabled())return;
+          this.longPressTriggered=true;
+          void this.sendInput({action:'rightclick',...this.pointerCoordinates(point.x,point.y)},false);
+        },520);
+      }
+    }else if(this.pointers.size===2){
+      this.cancelLongPress();
+      const pair=[...this.pointers.values()].slice(0,2);
+      this.twoFingerLastY=(pair[0].clientY+pair[1].clientY)/2;
+      this.twoFingerStartCenterY=this.twoFingerLastY;
+      this.twoFingerGesture='pending';
+      if(this.dragging&&this.remoteControlEnabled()){
+        this.dragging=false;
+        const p=pair[0];
+        void this.sendInput({action:'leftup',...this.pointerCoordinates(p.x,p.y)},false);
+      }
+    }
   }
 
   remotePointerMove(event:PointerEvent):void{
-    if(!this.remoteControlEnabled()||!this.dragging)return;
-    const now=performance.now();if(now-this.lastMoveAt<45)return;this.lastMoveAt=now;
-    const p=this.pointerPosition(event);void this.sendInput({action:'move',...p},false);
+    const point=this.pointers.get(event.pointerId);if(!point)return;
+    event.preventDefault();
+    const pos=this.pointerPosition(event);point.x=pos.x;point.y=pos.y;point.clientX=event.clientX;point.clientY=event.clientY;
+
+    if(this.pointers.size>=2){
+      this.cancelLongPress();
+      const pair=[...this.pointers.values()].slice(0,2);
+      const centerY=(pair[0].clientY+pair[1].clientY)/2;
+      const centerTravel=Math.abs(centerY-this.twoFingerStartCenterY);
+
+      if(this.twoFingerGesture==='pending'&&centerTravel>=18)this.twoFingerGesture='scroll';
+
+      if(this.twoFingerGesture==='scroll'&&this.remoteControlEnabled()){
+        const dy=centerY-this.twoFingerLastY;
+        if(Math.abs(dy)>10){
+          this.twoFingerLastY=centerY;
+          const centerX=(pair[0].x+pair[1].x)/2;
+          const normalizedY=(pair[0].y+pair[1].y)/2;
+          void this.sendInput({action:'wheel',delta:dy>0?120:-120,...this.pointerCoordinates(centerX,normalizedY)},false);
+        }
+      }
+      return;
+    }
+
+    if(!this.remoteControlEnabled())return;
+    const moved=Math.hypot(point.clientX-point.startClientX,point.clientY-point.startClientY);
+    if(moved>10)this.cancelLongPress();
+    if(moved>10&&!this.dragging){
+      this.dragging=true;
+      const start=this.dragStart??{x:point.startX,y:point.startY};
+      void this.sendInput({action:'leftdown',...this.pointerCoordinates(start.x,start.y)},false);
+    }
+    if(this.dragging){
+      const now=performance.now();if(now-this.lastMoveAt<28)return;this.lastMoveAt=now;
+      void this.sendInput({action:'move',...this.pointerCoordinates(point.x,point.y)},false);
+    }
   }
 
   remotePointerUp(event:PointerEvent):void{
-    if(!this.remoteControlEnabled()||!this.dragging)return;
-    event.preventDefault();this.dragging=false;
-    const p=this.pointerPosition(event);void this.sendInput({action:'leftup',...p},false);
+    const point=this.pointers.get(event.pointerId);if(!point)return;
+    event.preventDefault();
+    const wasMulti=this.pointers.size>1;
+    this.pointers.delete(event.pointerId);
+    this.cancelLongPress();
+
+    if(wasMulti){
+      if(this.pointers.size<2){
+        this.twoFingerLastY=0;
+        this.twoFingerStartCenterY=0;
+        this.twoFingerGesture='none';
+      }
+      return;
+    }
+
+    if(!this.remoteControlEnabled())return;
+    const coords=this.pointerCoordinates(point.x,point.y);
+    if(this.dragging){
+      this.dragging=false;
+      void this.sendInput({action:'leftup',...coords},false);
+      return;
+    }
+    if(this.longPressTriggered){this.longPressTriggered=false;return;}
+
+    const now=performance.now();
+    const isDouble=now-this.lastTapAt<320&&this.lastTapPoint&&Math.hypot(point.x-this.lastTapPoint.x,point.y-this.lastTapPoint.y)<0.035;
+    if(isDouble){
+      if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);
+      this.singleTapTimer=undefined;this.lastTapAt=0;this.lastTapPoint=undefined;
+      void this.sendInput({action:'doubleclick',...coords},false);
+    }else{
+      this.lastTapAt=now;this.lastTapPoint={x:point.x,y:point.y};
+      if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);
+      this.singleTapTimer=window.setTimeout(()=>{
+        void this.sendInput({action:'leftclick',...coords},false);
+        this.singleTapTimer=undefined;
+      },250);
+    }
+  }
+
+  remotePointerCancel(event:PointerEvent):void{
+    const point=this.pointers.get(event.pointerId);
+    this.pointers.delete(event.pointerId);this.cancelLongPress();
+    if(this.pointers.size<2){this.twoFingerGesture='none';this.twoFingerLastY=0;this.twoFingerStartCenterY=0;}
+    if(this.dragging&&point&&this.remoteControlEnabled()){this.dragging=false;void this.sendInput({action:'leftup',...this.pointerCoordinates(point.x,point.y)},false);}
   }
 
   remoteContextMenu(event:MouseEvent):void{
     event.preventDefault();if(!this.remoteControlEnabled())return;
-    const p=this.pointerPosition(event);void this.sendInput({action:'rightclick',...p},false);
+    const pos=this.pointerPosition(event);void this.sendInput({action:'rightclick',...this.pointerCoordinates(pos.x,pos.y)},false);
   }
 
   remoteWheel(event:WheelEvent):void{
     if(!this.remoteControlEnabled())return;
-    event.preventDefault();const p=this.pointerPosition(event);const delta=event.deltaY>0?-120:120;
-    void this.sendInput({action:'wheel',delta,...p},false);
+    event.preventDefault();const pos=this.pointerPosition(event);const delta=event.deltaY>0?-120:120;
+    void this.sendInput({action:'wheel',delta,...this.pointerCoordinates(pos.x,pos.y)},false);
   }
 
-  async remoteKey(key:string):Promise<void>{await this.sendInput({action:'key',key},true);}
+  async remoteKey(key:string):Promise<void>{await this.sendInput({action:'key',key,monitorId:this.remoteMonitor},true);}
+  async remoteShortcut(shortcut:string):Promise<void>{await this.sendInput({action:'shortcut',shortcut,monitorId:this.remoteMonitor},true);}
   async sendRemoteText():Promise<void>{
     const text=this.remoteText;if(!text)return;
-    await this.sendInput({action:'text',text},true);this.remoteText='';
+    await this.sendInput({action:'text',text,monitorId:this.remoteMonitor},true);this.remoteText='';
   }
 
   homeCards():HomeCardPreference[]{return [...(this.settings()?.settings.ui.homeCards??[])].sort((a,b)=>a.order-b.order);}
-
-  async toggleHomeCard(item:HomeCardPreference):Promise<void>{
-    item.visible=!item.visible;await this.saveLayout(false);
-  }
-
-  async toggleCardSize(item:HomeCardPreference):Promise<void>{
-    item.size=item.size==='wide'?'normal':'wide';await this.saveLayout(false);
-  }
-
+  async toggleHomeCard(item:HomeCardPreference):Promise<void>{item.visible=!item.visible;await this.saveLayout(false);}
+  async toggleCardSize(item:HomeCardPreference):Promise<void>{item.size=item.size==='wide'?'normal':'wide';await this.saveLayout(false);}
   async moveHomeCard(item:HomeCardPreference,direction:-1|1):Promise<void>{
     const envelope=this.settings();if(!envelope)return;
     const cards=[...envelope.settings.ui.homeCards].sort((a,b)=>a.order-b.order);
     const index=cards.findIndex(c=>c.key===item.key);const target=index+direction;
     if(index<0||target<0||target>=cards.length)return;
     [cards[index],cards[target]]=[cards[target],cards[index]];
-    cards.forEach((card,i)=>card.order=(i+1)*10);
-    envelope.settings.ui.homeCards=cards;
+    cards.forEach((card,i)=>card.order=(i+1)*10);envelope.settings.ui.homeCards=cards;
     await this.saveLayout(false);
   }
-
   async resetHomeLayout():Promise<void>{
     if(!confirm('Restore the default Home dashboard card order, visibility and sizes?'))return;
-    const envelope=this.settings();if(!envelope)return;
-    envelope.settings.ui.homeCards=[];
-    await this.saveLayout(true);
+    const envelope=this.settings();if(!envelope)return;envelope.settings.ui.homeCards=[];await this.saveLayout(true);
   }
 
-  formatBytes(n:number):string{
-    if(!Number.isFinite(n))return'—';const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return`${n<10&&i>0?n.toFixed(1):Math.round(n)} ${u[i]}`;
-  }
-
-  windowState(item:DesktopWindow):string{
-    if(item.foreground)return'FOREGROUND';if(item.minimized)return'MINIMIZED';if(item.maximized)return'MAXIMIZED';return'OPEN';
-  }
+  formatBytes(n:number):string{if(!Number.isFinite(n))return'—';const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return`${n<10&&i>0?n.toFixed(1):Math.round(n)} ${u[i]}`;}
+  windowState(item:DesktopWindow):string{if(item.foreground)return'FOREGROUND';if(item.minimized)return'MINIMIZED';if(item.maximized)return'MAXIMIZED';return'OPEN';}
 
   private async pollVisibleState(force=false):Promise<void>{
     if(this.refreshing&&!force)return;this.refreshing=true;
@@ -219,19 +352,97 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   private async refreshProcesses():Promise<void>{try{this.processes.set(await this.control.get<DesktopProcess[]>('/api/desktop/processes'));}catch{this.processes.set([]);}}
   private async refreshAudio():Promise<void>{try{this.audioSessions.set(await this.control.get<AppAudioSession[]>('/api/desktop/audio-sessions'));}catch{this.audioSessions.set([]);}}
   private async refreshSettings():Promise<void>{try{this.settings.set(await this.control.get<SettingsEnvelope>('/api/settings'));}catch{}}
-
-  private startFrames():void{
-    this.stopFrames();this.refreshFrame();this.frameTimer=window.setInterval(()=>this.refreshFrame(),280);
+  private async refreshMonitors():Promise<void>{
+    try{
+      const monitors=await this.control.get<DesktopMonitor[]>('/api/desktop/monitors');this.monitors.set(monitors);
+      if(!monitors.some(m=>m.id===this.remoteMonitor))this.remoteMonitor=monitors[0]?.id??'all';
+    }catch{this.monitors.set([]);}
   }
 
-  private stopFrames():void{if(this.frameTimer)window.clearInterval(this.frameTimer);this.frameTimer=undefined;this.dragging=false;}
-  private refreshFrame():void{this.remoteFrameUrl=`/api/desktop/frame?maxWidth=1600&quality=62&t=${Date.now()}`;}
+  private streamConfig():{maxWidth:number;quality:number;fps:number}{
+    if(this.remotePreset==='quality')return{maxWidth:2560,quality:78,fps:30};
+    if(this.remotePreset==='balanced')return{maxWidth:1920,quality:66,fps:45};
+    return{maxWidth:1600,quality:56,fps:60};
+  }
+
+  private startStream():void{
+    this.stopStream(false);
+    if(this.tab!=='remote')return;
+    const config=this.streamConfig();
+    const scheme=location.protocol==='https:'?'wss':'ws';
+    const url=`${scheme}://${location.host}/ws/desktop?monitorId=${encodeURIComponent(this.remoteMonitor)}&maxWidth=${config.maxWidth}&quality=${config.quality}&fps=${config.fps}`;
+    this.streamState.set('connecting');this.streamFps.set(0);this.frameCounter=0;this.frameWindowStart=performance.now();
+    const ws=new WebSocket(url);this.ws=ws;ws.binaryType='arraybuffer';
+    ws.onopen=()=>{if(this.ws===ws)this.streamState.set('live');};
+    ws.onmessage=(event)=>{
+      if(!(event.data instanceof ArrayBuffer))return;
+      this.pendingFrame=event.data;
+      if(!this.rendering)void this.renderPendingFrames();
+    };
+    ws.onerror=()=>{if(this.ws===ws)this.streamState.set('error');};
+    ws.onclose=()=>{
+      if(this.ws!==ws)return;this.ws=undefined;
+      if(this.tab==='remote'){
+        this.streamState.set('error');
+        this.reconnectTimer=window.setTimeout(()=>this.startStream(),850);
+      }else this.streamState.set('off');
+    };
+  }
+
+  private stopStream(clearState=true):void{
+    if(this.reconnectTimer)window.clearTimeout(this.reconnectTimer);this.reconnectTimer=undefined;
+    const ws=this.ws;this.ws=undefined;
+    if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))ws.close();
+    this.pendingFrame=undefined;this.rendering=false;
+    if(clearState)this.streamState.set('off');
+  }
+
+  private async renderPendingFrames():Promise<void>{
+    this.rendering=true;
+    try{
+      while(this.pendingFrame&&this.tab==='remote'){
+        const packet=this.pendingFrame;this.pendingFrame=undefined;
+        if(packet.byteLength<=16)continue;
+        const view=new DataView(packet);
+        const capturedAt=Number(view.getBigInt64(0,true));
+        const width=view.getInt32(8,true);const height=view.getInt32(12,true);
+        const jpeg=packet.slice(16);
+        const canvas=this.remoteCanvas?.nativeElement;if(!canvas)continue;
+        const blob=new Blob([jpeg],{type:'image/jpeg'});
+        await this.drawBlob(canvas,blob,width,height);
+        this.streamWidth.set(width);this.streamHeight.set(height);
+        this.streamLatency.set(Math.max(0,Date.now()-capturedAt));
+        this.frameCounter++;
+        const now=performance.now();const elapsed=now-this.frameWindowStart;
+        if(elapsed>=1000){this.streamFps.set(Math.round((this.frameCounter*1000/elapsed)*10)/10);this.frameCounter=0;this.frameWindowStart=now;}
+      }
+    }finally{this.rendering=false;if(this.pendingFrame&&this.tab==='remote')void this.renderPendingFrames();}
+  }
+
+  private async drawBlob(canvas:HTMLCanvasElement,blob:Blob,width:number,height:number):Promise<void>{
+    const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)return;
+    if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;
+    if('createImageBitmap' in window){
+      const bitmap=await createImageBitmap(blob);ctx.drawImage(bitmap,0,0,width,height);bitmap.close();return;
+    }
+    await new Promise<void>((resolve,reject)=>{
+      const url=URL.createObjectURL(blob);const image=new Image();
+      image.onload=()=>{ctx.drawImage(image,0,0,width,height);URL.revokeObjectURL(url);resolve();};
+      image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Frame decode failed.'));};image.src=url;
+    });
+  }
+
+  private focusRemoteCanvas():void{this.remoteCanvas?.nativeElement.focus?.();}
 
   private pointerPosition(event:MouseEvent|PointerEvent|WheelEvent):{x:number;y:number}{
-    const image=this.remoteImage?.nativeElement;const rect=image?.getBoundingClientRect();
+    const canvas=this.remoteCanvas?.nativeElement;const rect=canvas?.getBoundingClientRect();
     if(!rect||rect.width<=0||rect.height<=0)return{x:.5,y:.5};
     return{x:Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width)),y:Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height))};
   }
+
+  private pointerCoordinates(x:number,y:number):{x:number;y:number;monitorId:string}{return{x,y,monitorId:this.remoteMonitor};}
+  private cancelLongPress():void{if(this.longPressTimer)window.clearTimeout(this.longPressTimer);this.longPressTimer=undefined;}
+  private clearGestureTimers():void{this.cancelLongPress();if(this.singleTapTimer)window.clearTimeout(this.singleTapTimer);this.singleTapTimer=undefined;}
 
   private async sendInput(payload:Record<string,unknown>,showFeedback:boolean):Promise<void>{
     if(!this.remoteControlEnabled()){if(showFeedback)this.notice('View-only mode','Enable remote screen control before sending input.','warning');return;}
@@ -244,22 +455,13 @@ export class DesktopControlComponent implements OnInit,OnDestroy {
   private async saveLayout(showMessage:boolean):Promise<void>{
     const envelope=this.settings();if(!envelope)return;
     try{
-      await this.control.put('/api/settings',envelope.settings);
-      await this.refreshSettings();
+      await this.control.put('/api/settings',envelope.settings);await this.refreshSettings();
       window.dispatchEvent(new CustomEvent('twina-home-layout-changed'));
       if(showMessage)this.notice('Home layout restored','Default Home dashboard layout was restored.','success');
     }catch(e){this.fail('Home layout save failed',e);}
   }
 
-  private resultFeedback(result:CommandResult,successTitle:string):void{
-    this.notice(result.verified?successTitle:'Executed • state unverified',result.message,result.verified?'success':'warning');
-  }
-
-  private notice(title:string,detail:string,state:FeedbackState):void{
-    this.feedback.set({title,detail,state});window.setTimeout(()=>this.feedback.set(null),3800);
-  }
-
-  private fail(title:string,error:unknown):void{
-    const e=error as any;this.notice(title,e?.error?.message||e?.error?.detail||e?.message||'Unknown error','error');
-  }
+  private resultFeedback(result:CommandResult,successTitle:string):void{this.notice(result.verified?successTitle:'Executed • state unverified',result.message,result.verified?'success':'warning');}
+  private notice(title:string,detail:string,state:FeedbackState):void{this.feedback.set({title,detail,state});window.setTimeout(()=>this.feedback.set(null),3800);}
+  private fail(title:string,error:unknown):void{const e=error as any;this.notice(title,e?.error?.message||e?.error?.detail||e?.message||'Unknown error','error');}
 }

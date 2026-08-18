@@ -67,16 +67,19 @@ public sealed class SettingsStore
         if (!_settings.DevProjects.Any(p => p.Id.Equals("twina", StringComparison.OrdinalIgnoreCase)))
         {
             var root = FindProjectRoot(_environment.ContentRootPath);
-            _settings.DevProjects.Insert(0, new DevProjectConfig
+            if (root is not null)
             {
-                Id = "twina",
-                Name = "TWIN A Control Center",
-                WorkingDirectory = root,
-                SolutionOrProject = Path.Combine(root, "TwinAControlCenter.sln"),
-                BuildCommand = "powershell -ExecutionPolicy Bypass -File .\\scripts\\build.ps1",
-                TestCommand = "dotnet test .\\TwinAControlCenter.sln --no-restore",
-                RunCommand = "powershell -ExecutionPolicy Bypass -File .\\scripts\\run.ps1"
-            });
+                _settings.DevProjects.Insert(0, new DevProjectConfig
+                {
+                    Id = "twina",
+                    Name = "TWIN A Control Center",
+                    WorkingDirectory = root,
+                    SolutionOrProject = Path.Combine(root, "TwinAControlCenter.sln"),
+                    BuildCommand = "powershell -ExecutionPolicy Bypass -File .\\scripts\\build.ps1",
+                    TestCommand = "dotnet test .\\TwinAControlCenter.sln --no-restore",
+                    RunCommand = "powershell -ExecutionPolicy Bypass -File .\\scripts\\run.ps1"
+                });
+            }
         }
 
         if (_settings.Flows.Count == 0)
@@ -131,12 +134,12 @@ public sealed class SettingsStore
         }
     }
 
-    private static string FindProjectRoot(string contentRoot)
+    private static string? FindProjectRoot(string contentRoot)
     {
         var dir = new DirectoryInfo(contentRoot);
         for (var i = 0; i < 5 && dir is not null; i++, dir = dir.Parent)
             if (File.Exists(Path.Combine(dir.FullName, "TwinAControlCenter.sln"))) return dir.FullName;
-        return Directory.GetCurrentDirectory();
+        return null;
     }
 
     private void SaveInternal()

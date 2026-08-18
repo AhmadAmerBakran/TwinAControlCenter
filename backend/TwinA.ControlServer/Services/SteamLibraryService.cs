@@ -130,6 +130,8 @@ public sealed class SteamLibraryService
 
     private static string? ReadSteamPath()
     {
+        if (!OperatingSystem.IsWindows()) return null;
+
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");

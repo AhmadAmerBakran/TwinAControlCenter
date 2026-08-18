@@ -1,533 +1,671 @@
 # TWIN A Control Center
 
-> Turn an iPad into a private control center for a Windows PC.
+Turn an iPad into a private Windows control center.
 
-TWIN A Control Center is a Windows + iPad control dashboard for OBS, audio, Steam games, files, system information, developer workflows, and optional MQTT/IoT devices. The Control Server stays on `127.0.0.1` and the iPad reaches it privately through Tailscale Serve.
+TWIN A gives you live PC monitoring, OBS controls, Windows audio, Steam games, files, task/window management, workflows, and a high-refresh remote desktop from an iPad.
 
-This guide is written so a user can start from a clean supported Windows computer and follow the steps in order without editing source code or hardcoded machine paths.
+**You do not need coding experience to install the normal Windows version.**
 
-## Supported environment
+---
 
-TWIN A is currently intended for:
+## The easiest way to install TWIN A
 
-- Windows 10/11 x64, with Windows 11 recommended
-- .NET 10 SDK
-- Node.js 24
-- Git for Windows
-- Tailscale for Windows
-- iPad/iPadOS with Safari
+### 1. Download the Windows installer
 
-Optional integrations:
-
-- OBS Studio
-- Steam
-- Discord Desktop
-- JetBrains Rider
-- NVIDIA GPU telemetry through `nvidia-smi`
-- MQTT broker/devices
-
-TWIN A is **not** currently a macOS or Linux host application because the Desktop Agent uses Windows APIs.
-
-## What it can do
-
-Depending on the software installed on the PC, TWIN A can provide live CPU/RAM/GPU information, Windows volume and audio-device control, OBS recording/replay/scene controls, Steam game discovery and launching, Discord shortcuts, screenshots, file management, developer-project controls, workflows, and optional MQTT/IoT controls.
-
-TWIN A reports actions as verified, executed-but-unverified, or failed instead of claiming success when the final state cannot be proven.
-
-## How it works
+Open the **Releases** section of this GitHub repository and download the newest file named similar to:
 
 ```text
-                    iPad / Safari PWA
-                           │
-                           │ private HTTPS
-                           ▼
-                        Tailscale
-                           │
-                           ▼
-                     Windows PC
-                           │
-                    Tailscale Serve
-                           │
-                           ▼
-                   127.0.0.1:5055
-                           │
-                  TWIN A Control Server
-                     │            │
-                    OBS      Desktop Agent
-                                  │
-                       Windows / Audio / Files
+TwinA-Control-Center-Setup-0.9.0-win-x64.exe
 ```
 
-The PC may use Ethernet while the iPad uses Wi-Fi. They do not need to be on the same physical network as long as both devices are connected to the same Tailscale tailnet.
+Do not download the source-code ZIP unless you are a developer.
 
-**Do not port-forward port `5055` on your router.**
+> Development/test builds may show an **Unknown publisher** Windows SmartScreen warning until release code-signing is added. Only download TWIN A from this repository's official Releases page.
 
-# First-time installation
+### 2. Run the installer
 
-Follow these steps in order.
+Double-click the downloaded installer.
 
-## 1. Install Git for Windows
+The installer installs TWIN A itself as a self-contained Windows application. Normal users do **not** need to separately install:
 
-Install Git from the official Git for Windows website, then open a new PowerShell window and verify:
+- .NET SDK
+- Node.js
+- npm
+- Git
+- Rider / Visual Studio
 
-```powershell
-git --version
-```
+Those tools are only needed by developers who build TWIN A from source.
 
-## 2. Install the .NET 10 SDK
+### 3. Choose the companion applications you want
 
-Install the **.NET 10 SDK**, not only the runtime.
+During installation TWIN A asks which integrations should also be installed.
 
-Verify:
+#### Tailscale — recommended
 
-```powershell
-dotnet --version
-```
+Tailscale provides the private connection between the Windows PC and the iPad.
 
-The version must begin with `10.`.
+Leave this selected if you want to use TWIN A from the iPad.
 
-## 3. Install Node.js 24
+#### OBS Studio — optional
 
-Install Node.js 24, then reopen PowerShell and verify:
+Select OBS Studio if you want:
 
-```powershell
-node --version
-npm --version
-```
+- recording controls
+- Replay Buffer controls
+- OBS scenes
+- OBS mixer controls
+- recording workflows
 
-## 4. Install Tailscale
+If OBS is already installed, the installer leaves the existing installation in place.
 
-Install Tailscale for Windows, sign in, and connect the PC to your tailnet.
+#### Steam — optional
 
-Verify:
+Select Steam if you want automatic Steam library/game discovery and game launching.
 
-```powershell
-tailscale status
-```
+#### Discord — optional
 
-If the command is not on PATH, use:
+Select Discord if you want TWIN A's Discord shortcuts/integration.
 
-```powershell
-& "C:\Program Files\Tailscale\tailscale.exe" status
-```
+TWIN A uses Windows Package Manager (`winget`) to install selected third-party companion applications from their registered package sources. If Windows Package Manager is unavailable, TWIN A itself is still installed and the companion application can be installed manually later.
 
-You do not need an Exit Node for TWIN A.
+### 4. Choose whether TWIN A starts with Windows
 
-## 5. Install optional applications
-
-Install only what you want to use:
-
-- OBS Studio for recording/scene/replay controls
-- Steam for automatic Steam library discovery
-- Discord Desktop for Discord shortcuts
-- Rider if you want IDE integration
-
-OBS may be installed normally or through Steam. TWIN A automatically looks for common OBS installations and Steam library locations. A custom/portable OBS path can also be configured without changing source code.
-
-# Download TWIN A
-
-Choose a project folder. This example uses `RiderProjects`, but the repository does not depend on that folder name.
-
-```powershell
-New-Item -ItemType Directory -Force "$HOME\RiderProjects" | Out-Null
-Set-Location "$HOME\RiderProjects"
-git clone https://github.com/AhmadAmerBakran/TwinAControlCenter.git
-Set-Location ".\TwinAControlCenter"
-```
-
-Verify that you are in the repository root:
-
-```powershell
-Test-Path ".\TwinAControlCenter.sln"
-Test-Path ".\frontend\package.json"
-Test-Path ".\backend\TwinA.ControlServer\TwinA.ControlServer.csproj"
-```
-
-All three should return `True`.
-
-# Build TWIN A
-
-From the repository root run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-```
-
-The build script now:
-
-1. checks that .NET, Node.js and npm are available
-2. verifies that the .NET 10 SDK is being used
-3. detects machine-specific optional application paths
-4. installs the exact frontend dependency set from `package-lock.json` with `npm ci`
-5. builds the Angular production frontend
-6. copies the frontend into the ASP.NET server
-7. builds the Control Server
-8. builds the Windows Desktop Agent
-
-A successful build ends with:
+The installer offers:
 
 ```text
-TWIN A build complete - all build steps succeeded.
+Start TWIN A automatically when I sign in to Windows
 ```
 
-Do not continue if the build reports an error. See Troubleshooting below.
+This is recommended for an iPad control-panel setup.
 
-# OBS setup (optional)
+TWIN A runs in your signed-in Windows session because features such as remote desktop, audio control and window control require access to your interactive desktop.
 
-Skip this section if you do not use OBS.
+### 5. Finish installation
 
-## Enable OBS WebSocket
-
-Open OBS and go to:
+At the end of installation leave:
 
 ```text
-Tools → WebSocket Server Settings
+Start TWIN A and configure private iPad access
 ```
 
-Use:
+selected.
 
-- WebSocket enabled
-- port `4455`
-- authentication enabled
-- a strong password
+TWIN A starts in the Windows notification area/system tray.
 
-Do not place the password in GitHub, `README.md`, or `appsettings.json`.
+---
 
-Save it for your Windows user with:
+# First-time iPad setup
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\set-obs-password.ps1
-```
+After installation TWIN A guides you through the Tailscale connection.
 
-The password is stored in the Windows user environment as `TWINA_OBS_PASSWORD`.
+## On the Windows PC
 
-## OBS application path
+If Tailscale is not signed in yet, TWIN A opens Tailscale and asks you to:
 
-TWIN A runs `scripts\detect-apps.ps1` automatically during build/startup. It checks normal OBS installation locations and Steam libraries.
+1. Sign in to Tailscale.
+2. Wait until Tailscale says **Connected**.
+3. Return to the TWIN A setup message and choose **Retry**.
 
-You can run detection manually:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\detect-apps.ps1
-```
-
-For a portable or unusual OBS installation, set the path once:
-
-```powershell
-[Environment]::SetEnvironmentVariable(
-    "TWINA_OBS_PATH",
-    "C:\Your\Custom\OBS\bin\64bit\obs64.exe",
-    "User"
-)
-```
-
-Restart TWIN A afterward.
-
-If you use Replay Buffer, enable it in OBS under `Settings → Output → Replay Buffer`.
-
-# Run TWIN A on the PC
-
-From the repository root:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
-```
-
-The script starts two components:
-
-- **Desktop Agent** in a separate PowerShell window
-- **Control Server** in the original PowerShell window
-
-Keep both running.
-
-The server listens only on:
+TWIN A then configures private Tailscale Serve access to its local server on:
 
 ```text
-http://127.0.0.1:5055
+127.0.0.1:5055
 ```
 
-If you receive a message saying TWIN A has not been built, run `scripts\build.ps1` first.
+TWIN A remains bound to localhost. You should **not** port-forward port `5055` on your router.
 
-# Test the local installation
+When setup succeeds, TWIN A shows an address similar to:
 
-Before configuring the iPad, test on the PC.
+```text
+https://your-computer.your-tailnet.ts.net
+```
+
+The private address is copied to the Windows clipboard.
+
+## On the iPad
+
+1. Install **Tailscale** from the iPad App Store.
+2. Sign in using the **same Tailscale account/tailnet** as the Windows PC.
+3. Make sure Tailscale shows **Connected**.
+4. Open **Safari**.
+5. Open the private `.ts.net` address TWIN A gave you.
+6. Confirm the TWIN A dashboard loads.
+
+The PC can use Ethernet while the iPad uses Wi-Fi. They do not need to use the same physical network.
+
+## Add TWIN A to the iPad Home Screen
+
+In Safari:
+
+1. Tap **Share**.
+2. Tap **Add to Home Screen**.
+3. If shown, enable **Open as Web App**.
+4. Name it `TWIN A`.
+5. Tap **Add**.
+
+TWIN A can now be launched from the iPad Home Screen like an app.
+
+TWIN A requests a Screen Wake Lock while the web app is visible so the iPad can remain useful as an always-on control panel. iPadOS may still release the lock in system-controlled situations such as power-saving conditions, and the physical power button always remains in control.
+
+---
+
+# Opening TWIN A later
+
+After installation, TWIN A can be opened in several ways.
+
+### Start menu
 
 Open:
 
 ```text
+Start → TWIN A Control Center
+```
+
+### Desktop shortcut
+
+If you selected the desktop-shortcut option during installation, double-click:
+
+```text
+TWIN A Control Center
+```
+
+### System tray
+
+TWIN A runs in the Windows notification area.
+
+Right-click its tray icon for:
+
+- **Open TWIN A**
+- **Configure iPad Access**
+- **Open Tailscale**
+- **Restart TWIN A**
+- **Exit TWIN A**
+
+Double-clicking the tray icon opens the dashboard.
+
+---
+
+# If you skipped iPad setup
+
+You can run it again at any time.
+
+Open:
+
+```text
+Start → TWIN A - Configure iPad Access
+```
+
+or right-click the TWIN A tray icon and choose:
+
+```text
+Configure iPad Access
+```
+
+---
+
+# Main features
+
+## Home
+
+The Home page provides quick access to the controls you use most often.
+
+It can show real/live state for supported features instead of simply remembering the last button pressed.
+
+Examples include:
+
+- CPU usage
+- RAM usage
+- NVIDIA GPU usage and temperature when available
+- OBS running state
+- recording state
+- Replay Buffer state
+- Steam running state
+- screenshots
+- master audio controls
+
+Where the target application does not provide trustworthy state readback, TWIN A does not pretend the action was verified.
+
+## Studio / OBS
+
+With OBS Studio configured, TWIN A can provide:
+
+- start/stop recording
+- pause/resume recording
+- start/stop Replay Buffer
+- save replay clips
+- scene discovery and switching
+- OBS audio-source discovery
+- mute/unmute OBS audio sources
+- recording/session markers
+
+OBS WebSocket authentication is supported. Passwords are stored outside the Git repository.
+
+## Audio
+
+TWIN A supports Windows audio controls including:
+
+- master volume
+- master mute
+- playback-device switching
+- microphone/capture-device discovery
+- OBS mixer controls
+- **per-application Windows audio mixer**
+
+The per-app mixer reads the actual Windows audio-session state and verifies volume/mute changes where Windows exposes readback.
+
+## Games
+
+TWIN A can:
+
+- discover installed Steam libraries
+- discover installed Steam games
+- launch Steam games
+- detect running games when possible
+- store custom non-Steam games
+- apply game profiles
+
+A game profile can prepare OBS, Discord, audio output, volume, scenes, Replay Buffer and recording before launching a game.
+
+## Desktop
+
+The Desktop section contains several Windows-control tools.
+
+### Window Manager
+
+See real visible Windows applications and their state.
+
+Supported actions include:
+
+- focus
+- minimize
+- maximize
+- restore
+- close
+
+### Task Manager
+
+See running processes with information such as:
+
+- process name
+- PID
+- memory usage
+- window title
+- responding state
+
+TWIN A can end tasks and verifies that the process actually disappeared before reporting success.
+
+Important/system/TWIN A processes are protected from the End Task button.
+
+### App Mixer
+
+Control volume and mute state for individual Windows audio sessions.
+
+### Remote Screen
+
+TWIN A can display the Windows desktop on the iPad with a high-refresh binary WebSocket stream.
+
+It supports:
+
+- all displays or one selected monitor
+- measured FPS
+- measured frame latency
+- Max FPS / Balanced / High Quality modes
+- full-screen iPad view
+- Windows cursor rendering
+- tap to click
+- double-tap to double-click
+- hold for right-click
+- drag
+- two-finger scroll
+- pinch zoom
+- keyboard shortcuts
+- text input
+
+Remote mouse/keyboard control is **OFF by default**. Screen viewing does not automatically enable remote input.
+
+When remote input is enabled, TWIN A reports injected input as **EXECUTED • STATE UNVERIFIED** because Windows can confirm the input was sent but cannot prove what every third-party application did with that event.
+
+### Pinch zoom
+
+Use two fingers on the remote screen and move them apart/together.
+
+Pinch zoom works even while the remote screen is in **VIEW ONLY** mode.
+
+The on-screen zoom percentage / `−` / `+` / `FIT` overlay appears only while zoom is being adjusted, then disappears so it does not cover the Windows taskbar.
+
+Use the **ZOOM** button in the Remote Screen header if you want to show the controls manually.
+
+## Files
+
+TWIN A includes a real file browser for ready fixed/removable Windows drives.
+
+Supported operations include:
+
+- browse
+- open on the PC
+- upload
+- download
+- create folder
+- rename
+- copy
+- move
+- delete
+
+File operations are real. Treat destructive operations carefully.
+
+## System
+
+The System page can show:
+
+- CPU/GPU/RAM information
+- GPU temperature when supported
+- primary physical network adapter
+- network activity
+- link speed
+- Windows uptime
+- operating-system details
+- disk/free-space information
+
+## Dev
+
+The Dev section is intended for developers and can store project definitions, Git status, build/test/run commands and IDE shortcuts.
+
+Normal TWIN A users do not need to install developer tools just to run the installed app.
+
+## IoT
+
+MQTT/IoT support is optional.
+
+If no broker is configured, TWIN A should truthfully show that IoT is not configured rather than creating fake devices/data.
+
+## Flows
+
+Flows combine multiple actions into one workflow, for example:
+
+```text
+Open OBS
+→ Start Replay Buffer
+→ Set Windows volume
+→ Open Discord
+→ Launch a game
+→ Start recording
+```
+
+---
+
+# Understanding TWIN A status messages
+
+TWIN A deliberately distinguishes between three outcomes.
+
+## VERIFIED
+
+The action completed and TWIN A confirmed the resulting state.
+
+Examples can include:
+
+- process ended and PID disappeared
+- Windows audio mute state matched the requested value
+- OBS reported recording active
+
+## EXECUTED • STATE UNVERIFIED
+
+TWIN A genuinely sent/executed the command, but the target application or Windows API does not provide trustworthy final-state readback for that specific operation.
+
+This is not treated as VERIFIED.
+
+## FAILED
+
+The requested operation did not complete successfully.
+
+---
+
+# OBS setup
+
+If you selected OBS during installation, install/configure OBS before expecting Studio controls to connect.
+
+In OBS:
+
+1. Open **Tools**.
+2. Open **WebSocket Server Settings**.
+3. Enable the WebSocket server.
+4. Use port:
+
+```text
+4455
+```
+
+5. Enable authentication.
+6. Choose a strong password.
+
+TWIN A never needs that password committed to GitHub.
+
+For source/developer setups the included password helper stores it as the Windows user environment variable:
+
+```text
+TWINA_OBS_PASSWORD
+```
+
+For installed/public builds, keep credentials local to the PC and never share them in GitHub issues/screenshots.
+
+---
+
+# Security and privacy
+
+TWIN A controls real Windows functions, so its security model is intentionally conservative.
+
+## Local server
+
+The Control Server listens on:
+
+```text
 http://127.0.0.1:5055
 ```
 
-Then check:
+Do not expose that port with router port forwarding.
+
+## Private iPad access
+
+The intended remote path is:
 
 ```text
-http://127.0.0.1:5055/api/health
+iPad
+  ↓
+Tailscale
+  ↓
+private .ts.net address
+  ↓
+Tailscale Serve
+  ↓
+127.0.0.1:5055
 ```
 
-Run the read-only smoke test in a second PowerShell window:
+## Remote input
 
-```powershell
-Set-Location "$HOME\RiderProjects\TwinAControlCenter"
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
-```
+Remote mouse/keyboard input is disabled by default and must be explicitly enabled by the user.
 
-A healthy installation should show PASS results for health, live state, system details, audio devices, game discovery, drives, developer projects, flows, settings and IoT state. OBS warnings are normal when OBS is intentionally closed.
+## Personal data
 
-# Connect the iPad with Tailscale
+The public source repository must not contain a user's:
 
-Install the official Tailscale app on the iPad and sign in to the **same tailnet** as the PC. Allow the VPN configuration when iPadOS asks.
+- Windows username/path
+- public IP address
+- local IP address
+- Tailscale private hostname
+- OBS password
+- MQTT password
+- API keys/tokens
+- private configuration file
 
-Confirm Tailscale shows connected on both devices.
-
-# Publish TWIN A privately with Tailscale Serve
-
-TWIN A must already be running locally.
-
-On Windows, open **PowerShell as Administrator**.
-
-Go to the repository and run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\tailscale-serve.ps1
-```
-
-The script checks for administrator rights, finds the Tailscale CLI, creates a background Serve configuration for local port `5055`, and prints the current Serve status.
-
-Tailscale should provide a private HTTPS address similar to:
-
-```text
-https://your-pc.your-tailnet.ts.net
-```
-
-Do not open `127.0.0.1:5055` on the iPad; on the iPad that address means the iPad itself.
-
-Do not use Tailscale Funnel and do not configure router port forwarding for TWIN A.
-
-# Open TWIN A on the iPad
-
-Make sure:
-
-- Control Server is running
-- Desktop Agent is running
-- Tailscale is connected on the PC
-- Tailscale is connected on the iPad
-- Tailscale Serve is configured
-
-Open the `.ts.net` HTTPS address in Safari.
-
-When everything works, use Safari's **Share → Add to Home Screen** and name it `TWIN A`.
-
-# First-use checklist
-
-Before relying on the dashboard, test the functions you intend to use:
-
-- CPU/RAM/GPU values update
-- Windows volume and mute work
-- screenshot creates a real file
-- audio devices are listed
-- Steam games appear and a game can launch
-- OBS state is correct when OBS is open
-- OBS record/replay/scene controls work
-- drives and folders appear in Files
-- create/rename/delete only harmless test files first
-- Dev projects report correct paths/tools
-- IoT shows NOT CONFIGURED if MQTT is not configured
-
-File operations affect real Windows files. Be careful with delete, move and rename.
-
-# Normal daily use
-
-On the PC:
-
-```powershell
-Set-Location "$HOME\RiderProjects\TwinAControlCenter"
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
-```
-
-Normally Tailscale Serve persists after it has been configured once. Check it with an Administrator PowerShell if needed:
-
-```powershell
-tailscale serve status
-```
-
-On the iPad, connect Tailscale and open the TWIN A Home Screen app.
-
-# Updating TWIN A
-
-Stop TWIN A first, then:
-
-```powershell
-Set-Location "$HOME\RiderProjects\TwinAControlCenter"
-git pull
-powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
-```
-
-Run the smoke test again after an update.
-
-Because the build uses `npm ci`, frontend dependencies are recreated from the committed lock file rather than relying on whatever happened to be installed previously.
-
-# Personal configuration and backups
-
-Machine-specific TWIN A configuration is stored outside the Git repository at:
+Machine-specific TWIN A configuration is stored outside the installation/source tree at:
 
 ```text
 %LOCALAPPDATA%\TwinAControlCenter\config.json
 ```
 
-It can contain custom games, profiles, developer projects, flows, MQTT configuration and UI preferences.
+Secrets such as OBS/MQTT passwords are also kept outside source control.
 
-Secrets and machine paths are also kept outside Git:
+---
 
-```text
-TWINA_OBS_PASSWORD
-TWINA_MQTT_PASSWORD
-TWINA_OBS_PATH
-```
+# Updating TWIN A
 
-Back up `config.json` before reinstalling Windows if you want to keep your custom setup.
+For normal users, download and run the newer installer from **GitHub Releases**.
 
-Example:
+The installer uses the same application ID so it can upgrade the existing TWIN A installation rather than requiring users to rebuild the program from source.
 
-```powershell
-New-Item -ItemType Directory -Force "$HOME\Documents\TwinABackup" | Out-Null
-Copy-Item "$env:LOCALAPPDATA\TwinAControlCenter\config.json" "$HOME\Documents\TwinABackup\config.json" -Force
-```
+Your machine-specific configuration under `%LOCALAPPDATA%\TwinAControlCenter` is separate from the application installation.
 
-# Restoring after reinstalling Windows
+Before major upgrades, backing up that folder is still recommended.
 
-1. Install Git, .NET 10 SDK, Node.js 24 and Tailscale.
-2. Install optional applications you use.
-3. Clone the repository again with the real GitHub URL above.
-4. Restore `config.json` to `%LOCALAPPDATA%\TwinAControlCenter\config.json` if you have a backup.
-5. Run `scripts\set-obs-password.ps1` again if you use OBS.
-6. Run `scripts\set-mqtt-password.ps1` again if you use authenticated MQTT.
-7. Run `scripts\build.ps1`.
-8. Run `scripts\run.ps1`.
-9. Sign in to Tailscale on PC/iPad.
-10. Run `scripts\tailscale-serve.ps1` from Administrator PowerShell.
-11. Run the smoke test.
-12. Open the new `.ts.net` URL on the iPad.
+---
 
-A Windows reinstall can create a new Tailscale device identity/hostname, so do not assume the old `.ts.net` address will always remain identical.
+# Uninstalling TWIN A
 
-# Optional automatic startup
-
-Only configure automatic startup after manual startup works correctly.
-
-Use Windows Task Scheduler with:
-
-- trigger: **At log on**
-- run only when your user is logged on
-- program: `powershell.exe`
-- arguments:
+Open:
 
 ```text
--ExecutionPolicy Bypass -File "%USERPROFILE%\RiderProjects\TwinAControlCenter\scripts\run.ps1"
+Windows Settings → Apps → Installed apps
 ```
 
-If you cloned the repository somewhere else, use that real path instead.
-
-The Desktop Agent should run in the logged-in interactive user session rather than as a hidden Windows system service.
-
-# Security
-
-TWIN A controls real Windows actions and files.
-
-Use the intended security model:
+Find:
 
 ```text
-iPad → Tailscale → private .ts.net URL → Tailscale Serve → 127.0.0.1:5055
+TWIN A Control Center
 ```
 
-Important rules:
+and choose **Uninstall**.
 
-- never port-forward `5055`
-- do not expose the Control Server directly to the public internet
-- do not commit OBS/MQTT passwords or API secrets
-- protect your Tailscale account with strong authentication
-- only allow trusted devices/users into your tailnet
-- treat Files operations as real file operations
-- leave system-path protection enabled unless you understand the consequences
+TWIN A stops its launcher, Control Server and Desktop Agent during uninstall.
+
+Companion applications such as Tailscale, OBS Studio, Steam and Discord are **not automatically removed** when TWIN A is uninstalled. They are independent third-party applications and may contain their own accounts/settings or be used for other purposes.
+
+---
 
 # Troubleshooting
 
-## `git`, `dotnet`, `node` or `npm` is not recognized
+## TWIN A is installed but the iPad cannot connect
 
-Install the missing prerequisite, close PowerShell, open a new window and retry.
+On the PC:
 
-## Build says .NET 10 is required
+1. Make sure TWIN A is running in the system tray.
+2. Make sure Tailscale is connected.
+3. Right-click the TWIN A tray icon.
+4. Choose **Configure iPad Access**.
 
-Check:
+On the iPad:
 
-```powershell
-dotnet --version
+1. Make sure Tailscale is installed.
+2. Make sure it is signed into the same tailnet/account.
+3. Use the private `.ts.net` address — not `127.0.0.1`.
+
+## Why `127.0.0.1` does not work on the iPad
+
+`127.0.0.1` always means "this device".
+
+On the iPad it points to the iPad itself, not the Windows PC.
+
+Use the Tailscale `.ts.net` address.
+
+## OBS says offline
+
+Check that:
+
+- OBS is running
+- WebSocket server is enabled
+- WebSocket port is `4455`
+- authentication settings match TWIN A
+
+## Replay Buffer fails
+
+In OBS enable Replay Buffer under the appropriate Output settings first.
+
+## Steam games are missing
+
+Open Steam once and allow it to finish normal setup, then restart/rescan TWIN A.
+
+## Remote Screen works but mouse/keyboard does not
+
+This is expected when the Remote Screen says:
+
+```text
+VIEW ONLY
 ```
 
-Install the .NET 10 SDK if the active version does not begin with `10.`.
+Enable **CONTROL ENABLED** only when you intentionally want remote input.
 
-## `npm ci` fails
+## Pinch zoom does not control Windows
 
-Make sure you are using a supported Node.js installation and have internet access for the first dependency download. Do not manually delete or edit `package-lock.json` to work around an error.
+Pinch zoom changes the iPad view only. It does not zoom Windows itself.
 
-## OBS controls work but Launch OBS fails
+Two-finger scrolling sends Windows mouse-wheel input only when remote control is enabled.
 
-Run:
+## Windows Package Manager is unavailable
+
+TWIN A itself remains installed.
+
+Install the selected companion app manually and restart TWIN A.
+
+---
+
+# Developer / source installation
+
+This section is only for people modifying TWIN A itself.
+
+Normal users should use the installer above.
+
+## Requirements
+
+- Windows 11 recommended
+- Git
+- .NET 10 SDK
+- Node.js 24
+- npm
+- optional Rider / Visual Studio
+- Inno Setup 7 or 6 only if building the Windows installer locally
+
+## Clone
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\detect-apps.ps1
+git clone https://github.com/AhmadAmerBakran/TwinAControlCenter.git
+cd .\TwinAControlCenter
 ```
 
-If OBS is portable/custom, set `TWINA_OBS_PATH` manually as shown in the OBS section.
-
-## OBS shows offline
-
-Check that OBS is open, WebSocket is enabled on port `4455`, authentication is enabled, and the saved password is correct. Run `set-obs-password.ps1` again and restart TWIN A if needed.
-
-## TWIN A works on the PC but not the iPad
-
-Check:
+## Build source
 
 ```powershell
-tailscale status
-tailscale serve status
+powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 ```
 
-Also confirm the iPad is connected to the same tailnet and that Safari uses the private `.ts.net` HTTPS address.
-
-## Tailscale Serve script says Administrator is required
-
-Close that PowerShell window, right-click PowerShell, choose **Run as administrator**, return to the repository and run `scripts\tailscale-serve.ps1` again.
-
-## Desktop Agent is offline
-
-Stop both TWIN A windows and run:
+## Run source build
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
 ```
 
-Keep the separate Desktop Agent window open.
+## Smoke test
 
-## Port 5055 is already in use
-
-Check:
+In another PowerShell window:
 
 ```powershell
-Get-NetTCPConnection -LocalPort 5055 -ErrorAction SilentlyContinue
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
-An older TWIN A Control Server may still be running.
+## Build the Windows installer locally
 
-## GPU telemetry is unavailable
-
-Current GPU usage/temperature support is primarily NVIDIA-based. Test:
+Install Inno Setup, then run:
 
 ```powershell
-nvidia-smi --query-gpu=name,utilization.gpu,temperature.gpu --format=csv,noheader
+powershell -ExecutionPolicy Bypass -File .\scripts\package-installer.ps1
 ```
 
-The rest of TWIN A can still work without NVIDIA telemetry.
+The generated setup executable is written under:
+
+```text
+artifacts\installer\
+```
+
+The installer payload publishes the Control Server, Desktop Agent and Launcher as **self-contained Windows x64 applications**, so end users do not need the .NET SDK/runtime or Node.js just to run TWIN A.
+
+---
 
 # Repository structure
 
@@ -536,43 +674,38 @@ TwinAControlCenter
 │
 ├── backend
 │   ├── TwinA.ControlServer
-│   └── TwinA.DesktopAgent
+│   ├── TwinA.DesktopAgent
+│   └── TwinA.Launcher
 │
 ├── frontend
 │   └── Angular PWA
 │
+├── installer
+│   ├── TwinAControlCenter.iss
+│   └── install-dependencies.ps1
+│
 ├── scripts
 │   ├── build.ps1
-│   ├── detect-apps.ps1
 │   ├── run.ps1
 │   ├── smoke-test.ps1
-│   ├── tailscale-serve.ps1
-│   ├── set-obs-password.ps1
-│   └── set-mqtt-password.ps1
+│   └── package-installer.ps1
 │
 ├── docs
 ├── README.md
 └── TwinAControlCenter.sln
 ```
 
-# Quick install summary
+---
 
-For experienced users:
+# Important final note
 
-```powershell
-git clone https://github.com/AhmadAmerBakran/TwinAControlCenter.git
-cd TwinAControlCenter
-powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# optional OBS password setup:
-powershell -ExecutionPolicy Bypass -File .\scripts\set-obs-password.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
-```
+TWIN A is intended to be a **private personal Windows control surface**, not a publicly exposed remote-administration server.
 
-Then run the smoke test in another terminal and configure Tailscale Serve from **Administrator PowerShell**:
+For the intended setup:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\tailscale-serve.ps1
-```
-
-Open the resulting private `.ts.net` URL on the iPad and add it to the Home Screen.
+- keep the Control Server on localhost
+- use Tailscale for private device connectivity
+- do not router-port-forward TWIN A
+- keep passwords and personal configuration out of GitHub
+- leave remote input disabled unless you need it
+- pay attention to VERIFIED vs EXECUTED / STATE UNVERIFIED results

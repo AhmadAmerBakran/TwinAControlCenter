@@ -23,6 +23,9 @@ public sealed class DesktopControlService
     public Task<(bool Ok, string Message, string? Data)> ProcessesAsync(CancellationToken ct)
         => _agent.SendAsync("desktop.processes.get", new(), ct);
 
+    public Task<(bool Ok, string Message, string? Data)> MonitorsAsync(CancellationToken ct)
+        => _agent.SendAsync("desktop.monitors.get", new(), ct);
+
     public Task<(bool Ok, string Message, string? Data)> AudioSessionsAsync(CancellationToken ct)
         => _agent.SendAsync("audio.sessions.get", new(), ct);
 
@@ -48,11 +51,7 @@ public sealed class DesktopControlService
         if (pid == Environment.ProcessId)
             return CommandResult.Failure("desktop.process.end", "TWIN A Control Server protects itself from termination.");
 
-        var result = await _agent.SendAsync("desktop.process.end", new()
-        {
-            ["pid"] = pid
-        }, ct);
-
+        var result = await _agent.SendAsync("desktop.process.end", new() { ["pid"] = pid }, ct);
         return result.Ok
             ? CommandResult.Success("desktop.process.end", result.Message, result.Data)
             : CommandResult.Failure("desktop.process.end", result.Message, result.Data);
@@ -74,12 +73,13 @@ public sealed class DesktopControlService
             : CommandResult.Failure("audio.session.set", result.Message, result.Data);
     }
 
-    public async Task<(bool Ok, string Message, byte[]? Bytes)> CaptureFrameAsync(int maxWidth, int quality, CancellationToken ct)
+    public async Task<(bool Ok, string Message, byte[]? Bytes)> CaptureFrameAsync(string? monitorId, int maxWidth, int quality, CancellationToken ct)
     {
         var result = await _agent.SendAsync("desktop.frame.get", new()
         {
-            ["maxWidth"] = Math.Clamp(maxWidth, 640, 2560),
-            ["quality"] = Math.Clamp(quality, 30, 90)
+            ["monitorId"] = monitorId ?? "all",
+            ["maxWidth"] = Math.Clamp(maxWidth, 640, 4096),
+            ["quality"] = Math.Clamp(quality, 25, 92)
         }, ct);
 
         if (!result.Ok || string.IsNullOrWhiteSpace(result.Data))
@@ -109,10 +109,12 @@ public sealed class DesktopControlService
         var result = await _agent.SendAsync("desktop.input", new()
         {
             ["action"] = request.Action,
+            ["monitorId"] = string.IsNullOrWhiteSpace(request.MonitorId) ? "all" : request.MonitorId,
             ["x"] = Math.Clamp(request.X, 0, 1),
             ["y"] = Math.Clamp(request.Y, 0, 1),
             ["delta"] = request.Delta,
             ["key"] = request.Key,
+            ["shortcut"] = request.Shortcut,
             ["text"] = request.Text
         }, ct);
 
@@ -132,4 +134,12 @@ public sealed class DesktopControlService
 public sealed record DesktopWindowActionRequest(long Handle, string Action);
 public sealed record DesktopProcessEndRequest(int Pid);
 public sealed record DesktopAudioSessionRequest(int Pid, double? Volume, bool? Muted);
-public sealed record DesktopInputRequest(string Action, double X = 0.5, double Y = 0.5, int Delta = 0, string? Key = null, string? Text = null);
+public sealed record DesktopInputRequest(
+    string Action,
+    string? MonitorId = "all",
+    double X = 0.5,
+    double Y = 0.5,
+    int Delta = 0,
+    string? Key = null,
+    string? Shortcut = null,
+    string? Text = null);

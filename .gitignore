@@ -32,6 +32,11 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ========================================
+# Generated packaging output
+# ========================================
+artifacts/
+
+# ========================================
 # Secrets and machine-local configuration
 # ========================================
 .env
