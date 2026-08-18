@@ -13,6 +13,7 @@ internal static class Program
     private static Process? _server;
     private static Process? _agent;
     private static NotifyIcon? _tray;
+    private static Icon? _trayIcon;
     private static readonly Uri DashboardUri = new("http://127.0.0.1:5055");
 
     [STAThread]
@@ -22,6 +23,7 @@ internal static class Program
         if (!firstInstance)
         {
             if (args.Any(a => a.Equals("--open", StringComparison.OrdinalIgnoreCase))) OpenDashboard();
+            if (args.Any(a => a.Equals("--help", StringComparison.OrdinalIgnoreCase))) OpenHelpCenter();
             if (args.Any(a => a.Equals("--setup", StringComparison.OrdinalIgnoreCase))) OpenTailscale();
             return;
         }
@@ -32,6 +34,8 @@ internal static class Program
 
         if (args.Any(a => a.Equals("--setup", StringComparison.OrdinalIgnoreCase)))
             _ = ConfigureIpadAccessAsync();
+        else if (args.Any(a => a.Equals("--help", StringComparison.OrdinalIgnoreCase)))
+            _ = OpenHelpCenterWhenReadyAsync();
         else if (args.Any(a => a.Equals("--open", StringComparison.OrdinalIgnoreCase)))
             _ = OpenDashboardWhenReadyAsync();
 
@@ -88,6 +92,7 @@ internal static class Program
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open TWIN A", null, (_, _) => OpenDashboard());
+        menu.Items.Add("Help Center", null, (_, _) => OpenHelpCenter());
         menu.Items.Add("Configure iPad Access", null, (_, _) => _ = ConfigureIpadAccessAsync());
         menu.Items.Add("Configure OBS Password", null, (_, _) => ConfigureObsPassword());
         menu.Items.Add("Open Tailscale", null, (_, _) => OpenTailscale());
@@ -95,10 +100,13 @@ internal static class Program
         menu.Items.Add("Restart TWIN A", null, (_, _) => RestartServices());
         menu.Items.Add("Exit TWIN A", null, (_, _) => Application.Exit());
 
+        try { _trayIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+        catch { _trayIcon = null; }
+
         _tray = new NotifyIcon
         {
             Text = "TWIN A Control Center",
-            Icon = SystemIcons.Application,
+            Icon = _trayIcon ?? SystemIcons.Application,
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -110,10 +118,16 @@ internal static class Program
                 _tray.Visible = false;
                 _tray.Dispose();
             }
+            _trayIcon?.Dispose();
+            _trayIcon = null;
         };
     }
 
-    private static async Task OpenDashboardWhenReadyAsync()
+    private static async Task OpenDashboardWhenReadyAsync() => await OpenWhenReadyAsync(DashboardUri);
+
+    private static async Task OpenHelpCenterWhenReadyAsync() => await OpenWhenReadyAsync(new Uri(DashboardUri, "/help/index.html"));
+
+    private static async Task OpenWhenReadyAsync(Uri destination)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(700) };
         for (var i = 0; i < 24; i++)
@@ -123,19 +137,23 @@ internal static class Program
                 using var response = await http.GetAsync(new Uri(DashboardUri, "/api/health"));
                 if (response.IsSuccessStatusCode)
                 {
-                    OpenDashboard();
+                    OpenUri(destination);
                     return;
                 }
             }
             catch { }
             await Task.Delay(250);
         }
-        OpenDashboard();
+        OpenUri(destination);
     }
 
-    private static void OpenDashboard()
+    private static void OpenDashboard() => OpenUri(DashboardUri);
+
+    private static void OpenHelpCenter() => OpenUri(new Uri(DashboardUri, "/help/index.html"));
+
+    private static void OpenUri(Uri uri)
     {
-        try { Process.Start(new ProcessStartInfo { FileName = DashboardUri.ToString(), UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo { FileName = uri.ToString(), UseShellExecute = true }); }
         catch { }
     }
 
@@ -149,7 +167,8 @@ internal static class Program
             MaximizeBox = false,
             MinimizeBox = false,
             ClientSize = new Size(470, 185),
-            ShowInTaskbar = true
+            ShowInTaskbar = true,
+            Icon = _trayIcon ?? SystemIcons.Application
         };
 
         var intro = new Label
