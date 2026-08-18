@@ -90,21 +90,35 @@ internal static class Program
                 return new(true, $"Playback started for {Path.GetFileName(soundPath)} at {volume}% volume. Windows Media playback does not expose a reliable completion state to TWIN A.", soundPath);
             }
             case "discord.mute.toggle":
-                if (Process.GetProcessesByName("Discord").Length == 0) return new(false, "Discord is not running. No mute shortcut was sent.", null);
-                NativeHotkeys.CtrlShiftM(); await Task.Delay(120);
-                return new(true, "Discord is running and Ctrl + Shift + M was sent. Discord does not expose the resulting mute state to TWIN A.", JsonSerializer.Serialize(new { executed=true, verified=false }, JsonOptions));
+            {
+                if (Process.GetProcessesByName("Discord").Length == 0)
+                    return new(false, "Discord is not running. No mute shortcut was sent.", null);
+                if (!await NativeHotkeys.RouteToDiscordAsync(NativeHotkeys.CtrlShiftM))
+                    return new(false, "Discord is running, but TWIN A could not route the mute shortcut to its main window.", null);
+                return new(true,
+                    "Ctrl + Shift + M was routed to Discord and the previous active window was restored. Discord does not expose the resulting mute state to TWIN A.",
+                    JsonSerializer.Serialize(new { executed = true, verified = false }, JsonOptions));
+            }
             case "discord.soundboard.open":
-                if (Process.GetProcessesByName("Discord").Length == 0) return new(false, "Discord is not running. Soundboard hotkey was not sent.", null);
-                NativeHotkeys.CtrlBacktick(); await Task.Delay(120);
-                return new(true, "Discord Soundboard hotkey was sent. The Soundboard UI state is not exposed for verification.", JsonSerializer.Serialize(new { executed=true, verified=false }, JsonOptions));
+            {
+                if (Process.GetProcessesByName("Discord").Length == 0)
+                    return new(false, "Discord is not running. Soundboard hotkey was not sent.", null);
+                if (!await NativeHotkeys.RouteToDiscordAsync(NativeHotkeys.CtrlBacktick))
+                    return new(false, "Discord is running, but TWIN A could not route the Soundboard shortcut to its main window.", null);
+                return new(true,
+                    "Discord Soundboard shortcut was routed to Discord and the previous active window was restored. The Soundboard UI state is not exposed for verification.",
+                    JsonSerializer.Serialize(new { executed = true, verified = false }, JsonOptions));
+            }
             case "discord.deafen.toggle":
+            {
                 if (Process.GetProcessesByName("Discord").Length == 0)
                     return new(false, "Discord is not running. No deafen shortcut was sent.", null);
-                NativeHotkeys.CtrlShiftD();
-                await Task.Delay(150);
+                if (!await NativeHotkeys.RouteToDiscordAsync(NativeHotkeys.CtrlShiftD))
+                    return new(false, "Discord is running, but TWIN A could not route the deafen shortcut to its main window.", null);
                 return new(true,
-                    "Discord is running and Ctrl + Shift + D was sent. Discord does not expose the resulting deafen state to TWIN A, so the final state is unverified.",
+                    "Ctrl + Shift + D was routed to Discord and the previous active window was restored. Discord does not expose the resulting deafen state to TWIN A.",
                     JsonSerializer.Serialize(new { executed = true, verified = false }, JsonOptions));
+            }
             case "clipboard.set":
                 var text = req.Payload.TryGetValue("text", out var clipboardValue) ? clipboardValue?.ToString() ?? "" : "";
                 await RunPowerShell($"Set-Clipboard -Value '{text.Replace("'", "''")}'");
@@ -399,6 +413,14 @@ internal static class Program
     private static class NativeHotkeys
     {
         [DllImport("user32.dll", SetLastError = true)] private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr lpdwProcessId);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
         private const uint KeyUp = 0x0002;
         private const byte VkControl = 0x11;
         private const byte VkShift = 0x10;
@@ -406,6 +428,8 @@ internal static class Program
         private const byte VkM = 0x4D;
         private const byte VkOem3 = 0xC0;
         private const byte VkLeftWin = 0x5B;
+        private const int SwMinimize = 6;
+        private const int SwRestore = 9;
 
         public static void WinD()
         {
@@ -435,6 +459,73 @@ internal static class Program
             keybd_event(VkD, 0, KeyUp, UIntPtr.Zero);
             keybd_event(VkShift, 0, KeyUp, UIntPtr.Zero);
             keybd_event(VkControl, 0, KeyUp, UIntPtr.Zero);
+        }
+
+        public static async Task<bool> RouteToDiscordAsync(Action shortcut)
+        {
+            var target = FindDiscordWindow();
+            if (target == IntPtr.Zero) return false;
+
+            var previous = GetForegroundWindow();
+            var wasMinimized = IsIconic(target);
+            var currentThread = GetCurrentThreadId();
+            var previousThread = previous == IntPtr.Zero ? 0 : GetWindowThreadProcessId(previous, IntPtr.Zero);
+            var targetThread = GetWindowThreadProcessId(target, IntPtr.Zero);
+            var attachedPrevious = false;
+            var attachedTarget = false;
+
+            try
+            {
+                if (wasMinimized) ShowWindowAsync(target, SwRestore);
+
+                if (previousThread != 0 && previousThread != currentThread)
+                    attachedPrevious = AttachThreadInput(currentThread, previousThread, true);
+                if (targetThread != 0 && targetThread != currentThread && targetThread != previousThread)
+                    attachedTarget = AttachThreadInput(currentThread, targetThread, true);
+
+                if (!SetForegroundWindow(target))
+                {
+                    await Task.Delay(40);
+                    if (!SetForegroundWindow(target)) return false;
+                }
+
+                await Task.Delay(70);
+                shortcut();
+                await Task.Delay(70);
+                return true;
+            }
+            finally
+            {
+                if (previous != IntPtr.Zero && previous != target)
+                {
+                    SetForegroundWindow(previous);
+                    await Task.Delay(40);
+                }
+                if (wasMinimized) ShowWindowAsync(target, SwMinimize);
+                if (attachedTarget) AttachThreadInput(currentThread, targetThread, false);
+                if (attachedPrevious) AttachThreadInput(currentThread, previousThread, false);
+            }
+        }
+
+        private static IntPtr FindDiscordWindow()
+        {
+            var processes = Process.GetProcessesByName("Discord");
+            try
+            {
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        if (process.MainWindowHandle != IntPtr.Zero) return process.MainWindowHandle;
+                    }
+                    catch { }
+                }
+                return IntPtr.Zero;
+            }
+            finally
+            {
+                foreach (var process in processes) process.Dispose();
+            }
         }
     }
 
