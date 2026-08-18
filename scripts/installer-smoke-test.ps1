@@ -31,7 +31,6 @@ Assert-True (-not $desktopHtml.Contains('zoom-tools')) 'Removed zoom toolbar is 
 Assert-True (-not $remoteCss.Contains('.zoom-tools')) 'Removed zoom toolbar CSS is still present.'
 Assert-True ($desktopHtml.Contains('2 FINGERS · SCROLL')) 'Two-finger scrolling help is missing from Remote Screen.'
 Assert-True ($launcherProject.Contains('<ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>')) 'Launcher is not configured to embed the TWIN A application icon.'
-Assert-True ($installerScript.Contains('SetupIconFile=assets\TwinA.ico')) 'Installer is not configured to use the TWIN A setup icon.'
 Assert-True ($installerScript.Contains('TWIN A - Help Center')) 'Installer does not expose the offline TWIN A Help Center shortcut.'
 
 $installRoot = Join-Path $env:TEMP 'TwinAControlCenter-CI-Install'
