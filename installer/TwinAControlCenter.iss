@@ -29,7 +29,7 @@ SetupIconFile=assets\TwinA.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern dark
-UninstallDisplayIcon={app}\launcher\{#AppExeName}
+UninstallDisplayIcon={app}\assets\TwinA.ico
 SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
@@ -51,16 +51,17 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}\server"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\agent\*"; DestDir: "{app}\agent"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\launcher\*"; DestDir: "{app}\launcher"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "assets\TwinA.ico"; DestDir: "{app}\assets"; DestName: "TwinA.ico"; Flags: ignoreversion
 Source: "{#SourceRoot}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#SourceRoot}\install-dependencies.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"
-Name: "{autoprograms}\TWIN A - Configure iPad Access"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"
-Name: "{autoprograms}\TWIN A - Help Center"; Filename: "{app}\server\wwwroot\help\index.html"; IconFilename: "{app}\launcher\{#AppExeName}"
-Name: "{autoprograms}\TWIN A - Read Me"; Filename: "{app}\README.md"; IconFilename: "{app}\launcher\{#AppExeName}"
-Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\launcher\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\assets\TwinA.ico"; IconIndex: 0
+Name: "{autoprograms}\TWIN A - Configure iPad Access"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\assets\TwinA.ico"; IconIndex: 0
+Name: "{autoprograms}\TWIN A - Help Center"; Filename: "{app}\server\wwwroot\help\index.html"; IconFilename: "{app}\assets\TwinA.ico"; IconIndex: 0
+Name: "{autoprograms}\TWIN A - Read Me"; Filename: "{app}\README.md"; IconFilename: "{app}\assets\TwinA.ico"; IconIndex: 0
+Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; WorkingDir: "{app}\launcher"; IconFilename: "{app}\assets\TwinA.ico"; IconIndex: 0; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TwinAControlCenter"; ValueData: """{app}\launcher\{#AppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
