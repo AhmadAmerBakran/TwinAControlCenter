@@ -29,27 +29,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Refresh Angular migration lock
-        if: github.ref == 'refs/heads/improve/dependency-help-branding-2026-08' || github.head_ref == 'improve/dependency-help-branding-2026-08'
-        shell: powershell
-        run: |
-          Push-Location .\frontend
-          try {
-            Remove-Item .\package-lock.json -Force
-            npm install --package-lock-only --ignore-scripts --no-audit
-            if ($LASTEXITCODE -ne 0) { throw "Dependency lock refresh failed with exit code $LASTEXITCODE." }
-          }
-          finally { Pop-Location }
-
-      - name: Upload refreshed dependency lock
-        if: github.ref == 'refs/heads/improve/dependency-help-branding-2026-08' || github.head_ref == 'improve/dependency-help-branding-2026-08'
-        uses: actions/upload-artifact@v6
-        with:
-          name: frontend-package-lock-migration
-          path: frontend/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Privacy check
         shell: powershell
         run: .\scripts\privacy-check.ps1
@@ -58,16 +37,21 @@ jobs:
         shell: powershell
         run: .\scripts\build.ps1
 
-      - name: Frontend dependency health report
+      - name: Frontend outdated report
         continue-on-error: true
         shell: powershell
         run: |
           Push-Location .\frontend
+          try { npm outdated }
+          finally { Pop-Location }
+
+      - name: Frontend vulnerability audit
+        shell: powershell
+        run: |
+          Push-Location .\frontend
           try {
-            Write-Host '=== npm outdated ==='
-            npm outdated
-            Write-Host '=== npm audit (all dependencies) ==='
             npm audit --audit-level=low
+            if ($LASTEXITCODE -ne 0) { throw "Frontend dependency audit failed with exit code $LASTEXITCODE." }
           }
           finally { Pop-Location }
 
@@ -81,13 +65,3 @@ jobs:
           dotnet list .\TwinAControlCenter.sln package --deprecated
           Write-Host '=== outdated NuGet packages ==='
           dotnet list .\TwinAControlCenter.sln package --outdated
-
-      - name: Production dependency audit
-        shell: powershell
-        run: |
-          Push-Location .\frontend
-          try {
-            npm audit --omit=dev --audit-level=high
-            if ($LASTEXITCODE -ne 0) { throw "Production npm dependency audit failed with exit code $LASTEXITCODE." }
-          }
-          finally { Pop-Location }
