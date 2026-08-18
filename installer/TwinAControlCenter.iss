@@ -28,7 +28,6 @@ OutputBaseFilename=TwinA-Control-Center-Setup-{#AppVersion}-win-x64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern dark
-SetupIconFile=assets\TwinA.ico
 UninstallDisplayIcon={app}\launcher\{#AppExeName}
 SetupLogging=yes
 CloseApplications=yes
