@@ -6,8 +6,6 @@ on:
     branches:
       - main
       - 'feature/**'
-    tags:
-      - 'v*'
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -32,6 +30,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   installer:
@@ -64,15 +66,7 @@ jobs:
         shell: powershell
         run: |
           $packageVersion = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
-          if ($env:GITHUB_REF -like 'refs/tags/*') {
-            $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          }
-          elseif ($env:GITHUB_REF -eq 'refs/heads/main') {
-            $version = $packageVersion
-          }
-          else {
-            $version = "$packageVersion-dev"
-          }
+          $version = if ($env:GITHUB_REF -eq 'refs/heads/main') { $packageVersion } else { "$packageVersion-dev" }
           .\scripts\package-installer.ps1 -Version $version
 
       - name: Installer smoke test
@@ -88,7 +82,7 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release asset
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
@@ -97,7 +91,7 @@ jobs:
           if (-not $asset) { throw 'Installer asset was not produced.' }
 
           $packageVersion = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
-          $tag = if ($env:GITHUB_REF -eq 'refs/heads/main') { "v$packageVersion" } else { $env:GITHUB_REF_NAME }
+          $tag = "v$packageVersion"
 
           gh release view $tag --json tagName *> $null
           $releaseExists = $LASTEXITCODE -eq 0
