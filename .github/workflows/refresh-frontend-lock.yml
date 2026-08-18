@@ -1,0 +1,50 @@
+name: Refresh frontend lock
+
+on:
+  push:
+    branches:
+      - improve/dependency-help-branding-2026-08
+    paths:
+      - 'frontend/package.json'
+      - 'frontend/angular.json'
+      - '.github/workflows/refresh-frontend-lock.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-frontend-lock-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: improve/dependency-help-branding-2026-08
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Refresh package lock
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts --no-audit
+
+      - name: Commit refreshed lock
+        shell: bash
+        run: |
+          if git diff --quiet -- frontend/package-lock.json; then
+            echo 'package-lock.json is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/package-lock.json
+          git commit -m 'Refresh frontend dependency lock'
+          git push origin HEAD:improve/dependency-help-branding-2026-08
