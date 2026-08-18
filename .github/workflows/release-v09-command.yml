@@ -1,0 +1,88 @@
+name: TWIN A v0.9 release command
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.actor == github.repository_owner && github.event.issue.title == 'Release TWIN A v0.9.0'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Privacy check
+        shell: powershell
+        run: .\scripts\privacy-check.ps1
+
+      - name: Production dependency audit
+        shell: powershell
+        run: |
+          Push-Location .\frontend
+          try {
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
+            npm audit --omit=dev --audit-level=high
+            if ($LASTEXITCODE -ne 0) { throw "Production npm dependency audit failed with exit code $LASTEXITCODE." }
+          }
+          finally { Pop-Location }
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build v0.9.0 installer
+        shell: powershell
+        run: |
+          $version = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
+          if ($version -ne '0.9.0') { throw "Expected package version 0.9.0 but found $version." }
+          .\scripts\package-installer.ps1 -Version $version
+
+      - name: Installer smoke test
+        shell: powershell
+        run: .\scripts\installer-smoke-test.ps1
+
+      - name: Upload verified installer artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: TWIN-A-Control-Center-Installer-v0.9.0
+          path: artifacts/installer/TwinA-Control-Center-Setup-0.9.0-win-x64.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish verified GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'v0.9.0'
+          $asset = (Get-ChildItem 'artifacts\installer\TwinA-Control-Center-Setup-0.9.0-win-x64.exe' | Select-Object -First 1).FullName
+          if (-not $asset) { throw 'Verified v0.9.0 installer asset was not produced.' }
+
+          gh release view $tag --json tagName *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release upload $tag $asset --clobber
+          }
+          else {
+            gh release create $tag $asset --target main --generate-notes --title 'TWIN A Control Center v0.9.0'
+          }
