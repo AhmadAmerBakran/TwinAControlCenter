@@ -21,8 +21,11 @@ Assert-True (Test-Path -LiteralPath $InstallerPath -PathType Leaf) "Installer ex
 $desktopTs = Get-Content (Join-Path $Root 'frontend\src\app\desktop-control.component.ts') -Raw
 $desktopHtml = Get-Content (Join-Path $Root 'frontend\src\app\desktop-control.component.html') -Raw
 $remoteCss = Get-Content (Join-Path $Root 'frontend\src\app\remote-v08.css') -Raw
+$appIndex = Get-Content (Join-Path $Root 'frontend\src\index.html') -Raw
 $installerScript = Get-Content (Join-Path $Root 'installer\TwinAControlCenter.iss') -Raw
 $launcherProject = Get-Content (Join-Path $Root 'backend\TwinA.Launcher\TwinA.Launcher.csproj') -Raw
+$serverProject = Get-Content (Join-Path $Root 'backend\TwinA.ControlServer\TwinA.ControlServer.csproj') -Raw
+$agentProject = Get-Content (Join-Path $Root 'backend\TwinA.DesktopAgent\TwinA.DesktopAgent.csproj') -Raw
 
 foreach ($forbidden in @('remoteZoom', 'zoomToolsVisible', 'pinchStartDistance', 'pinchStartZoom')) {
     Assert-True (-not $desktopTs.Contains($forbidden)) "Removed zoom identifier is still present: $forbidden"
@@ -31,7 +34,11 @@ Assert-True (-not $desktopHtml.Contains('zoom-tools')) 'Removed zoom toolbar is 
 Assert-True (-not $remoteCss.Contains('.zoom-tools')) 'Removed zoom toolbar CSS is still present.'
 Assert-True ($desktopHtml.Contains('2 FINGERS · SCROLL')) 'Two-finger scrolling help is missing from Remote Screen.'
 Assert-True ($launcherProject.Contains('<ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>')) 'Launcher is not configured to embed the TWIN A application icon.'
+Assert-True ($serverProject.Contains('<ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>')) 'Control Server is not configured to embed the TWIN A application icon.'
+Assert-True ($agentProject.Contains('<ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>')) 'Desktop Agent is not configured to embed the TWIN A application icon.'
+Assert-True ($installerScript.Contains('SetupIconFile=assets\TwinA.ico')) 'Installer executable is not configured with the TWIN A icon.'
 Assert-True ($installerScript.Contains('TWIN A - Help Center')) 'Installer does not expose the offline TWIN A Help Center shortcut.'
+Assert-True ($appIndex.Contains('<b>HELP</b>')) 'The Control Center does not expose the visible Help Center launcher.'
 
 $installRoot = Join-Path $env:TEMP 'TwinAControlCenter-CI-Install'
 Remove-Item $installRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -60,18 +67,30 @@ Assert-True (Test-Path $help -PathType Leaf) 'Installed Help Center is missing.'
 
 $helpText = Get-Content $help -Raw
 Assert-True ($helpText.Contains('TWIN A Help Center')) 'Installed Help Center content is invalid.'
+Assert-True ($helpText.Contains('Start Here')) 'Installed Help Center start guide is missing.'
+Assert-True ($helpText.Contains('Installation')) 'Installed Help Center installation guide is missing.'
+Assert-True ($helpText.Contains('iPad & Tailscale')) 'Installed Help Center iPad guide is missing.'
+Assert-True ($helpText.Contains('OBS Studio')) 'Installed Help Center OBS guide is missing.'
+Assert-True ($helpText.Contains('Remote Screen')) 'Installed Help Center remote-screen guide is missing.'
 Assert-True ($helpText.Contains('Troubleshooting')) 'Installed Help Center troubleshooting tab is missing.'
 Assert-True ($helpText.Contains('Update & Recovery')) 'Installed Help Center recovery tab is missing.'
 
-# Verify the launcher has an embedded application icon. The desktop shortcut uses this target icon.
+# Verify the installer and all TWIN A executables expose associated application icons.
 Add-Type -AssemblyName System.Drawing
-$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcher)
-try {
-    Assert-True ($null -ne $icon) 'TWIN A launcher does not expose an associated application icon.'
-    Assert-True ($icon.Width -gt 0 -and $icon.Height -gt 0) 'TWIN A launcher icon is invalid.'
-}
-finally {
-    if ($null -ne $icon) { $icon.Dispose() }
+foreach ($iconTarget in @(
+    @{ Path=$InstallerPath; Label='installer' },
+    @{ Path=$launcher; Label='launcher' },
+    @{ Path=$server; Label='Control Server' },
+    @{ Path=$agent; Label='Desktop Agent' }
+)) {
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($iconTarget.Path)
+    try {
+        Assert-True ($null -ne $icon) "TWIN A $($iconTarget.Label) does not expose an associated application icon."
+        Assert-True ($icon.Width -gt 0 -and $icon.Height -gt 0) "TWIN A $($iconTarget.Label) icon is invalid."
+    }
+    finally {
+        if ($null -ne $icon) { $icon.Dispose() }
+    }
 }
 
 $shell = New-Object -ComObject WScript.Shell
@@ -112,11 +131,12 @@ Assert-True ($helpShortcutTarget.Equals($expectedHelpTarget, [StringComparison]:
 
 Write-Host 'Installer smoke test passed:' -ForegroundColor Green
 Write-Host ' - core executables installed' -ForegroundColor Green
-Write-Host ' - built-in multi-tab Help Center installed' -ForegroundColor Green
+Write-Host ' - installer and all app executables expose TWIN A icons' -ForegroundColor Green
+Write-Host ' - built-in multi-topic Help Center installed' -ForegroundColor Green
+Write-Host ' - visible in-app Help launcher verified' -ForegroundColor Green
 Write-Host ' - Help Center Start Menu shortcut created and verified' -ForegroundColor Green
 Write-Host ' - Remote Screen zoom controls absent' -ForegroundColor Green
 Write-Host ' - two-finger scroll retained' -ForegroundColor Green
-Write-Host ' - launcher application icon embedded' -ForegroundColor Green
 Write-Host ' - desktop shortcut created and targets TWIN A launcher' -ForegroundColor Green
 
 $uninstaller = Join-Path $installRoot 'unins000.exe'
