@@ -126,8 +126,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:RELEASE_VERSION"
 
-          gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName *> $null
-          $releaseExists = $LASTEXITCODE -eq 0
+          # Do not use `gh release view` as an existence probe here. On Windows
+          # PowerShell, a missing release writes to stderr and becomes a terminating
+          # NativeCommandError while ErrorActionPreference is Stop.
+          $releases = gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not list GitHub Releases.' }
+          $releaseExists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
 
           if ($releaseExists) {
             gh release upload $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --clobber
