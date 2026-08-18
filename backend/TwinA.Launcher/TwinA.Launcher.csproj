@@ -8,5 +8,8 @@
     <AssemblyName>TwinA.Launcher</AssemblyName>
     <RootNamespace>TwinA.Launcher</RootNamespace>
     <ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>
+    <Product>TWIN A Control Center</Product>
+    <Company>TWIN A</Company>
+    <Description>TWIN A Control Center Windows launcher</Description>
   </PropertyGroup>
 </Project>
