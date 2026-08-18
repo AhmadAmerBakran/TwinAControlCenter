@@ -95,6 +95,29 @@ jobs:
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Ensure release tag points to verified source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "v$env:RELEASE_VERSION"
+          git fetch origin --tags --force --quiet
+
+          $existingSha = git rev-parse -q --verify "refs/tags/$tag^{commit}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $existingSha = $existingSha.Trim()
+            if ($existingSha -ne $env:SOURCE_SHA) {
+              throw "Release tag $tag already points to $existingSha, but the verified main commit is $env:SOURCE_SHA. Bump frontend/package.json to a new version before publishing another release."
+            }
+            Write-Host "Release tag $tag already points to the verified source."
+          }
+          else {
+            git tag $tag $env:SOURCE_SHA
+            if ($LASTEXITCODE -ne 0) { throw "Could not create local release tag $tag." }
+            git push origin "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) { throw "Could not push release tag $tag." }
+            Write-Host "Created release tag $tag at $env:SOURCE_SHA."
+          }
+
       - name: Publish GitHub Release
         shell: powershell
         env:
@@ -111,7 +134,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Could not update release $tag." }
           }
           else {
-            gh release create $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --target $env:SOURCE_SHA --generate-notes --title "TWIN A Control Center $tag"
+            # The tag is deliberately created first. GitHub's release API can then use the
+            # existing tag without trying to create a tag for a commit that changes workflows.
+            gh release create $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --generate-notes --title "TWIN A Control Center $tag"
             if ($LASTEXITCODE -ne 0) { throw "Could not create release $tag." }
           }
 
