@@ -39,6 +39,7 @@ internal static class UpdateManager
         Action<string>? status = null)
     {
         if (!await Gate.WaitAsync(0)) return;
+        var shouldReportErrors = userInitiated;
 
         try
         {
@@ -88,6 +89,7 @@ internal static class UpdateManager
                 return;
             }
 
+            shouldReportErrors = true;
             var choice = MessageBox.Show(
                 $"TWIN A {release.VersionText} is available.\n\n" +
                 $"Installed version: {CurrentVersionText}\n" +
@@ -120,7 +122,7 @@ internal static class UpdateManager
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
-            if (userInitiated)
+            if (shouldReportErrors)
             {
                 MessageBox.Show(
                     "The update was cancelled before Windows granted administrator permission. TWIN A was not changed.",
@@ -131,7 +133,7 @@ internal static class UpdateManager
         }
         catch (Exception ex)
         {
-            if (userInitiated)
+            if (shouldReportErrors)
             {
                 var openRelease = MessageBox.Show(
                     $"TWIN A could not complete the automatic update.\n\n{ex.Message}\n\nOpen the official Releases page instead?",
