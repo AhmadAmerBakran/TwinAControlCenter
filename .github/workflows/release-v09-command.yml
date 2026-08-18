@@ -97,18 +97,48 @@ jobs:
 
       - name: Ensure release tag points to verified source
         shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:RELEASE_VERSION"
-          git fetch origin --tags --force --quiet
 
-          $existingSha = git rev-parse -q --verify "refs/tags/$tag^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $existingSha = $existingSha.Trim()
-            if ($existingSha -ne $env:SOURCE_SHA) {
-              throw "Release tag $tag already points to $existingSha, but the verified main commit is $env:SOURCE_SHA. Bump frontend/package.json to a new version before publishing another release."
+          # Listing releases succeeds even when there are no releases, unlike
+          # `gh release view`, which emits a native-command error for a missing release.
+          $releases = gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not list GitHub Releases.' }
+          $releaseExists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
+          "RELEASE_EXISTS=$($releaseExists.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          git fetch origin --tags --force --quiet
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch Git tags.' }
+
+          $matchingTags = @(git tag --list $tag)
+          if ($LASTEXITCODE -ne 0) { throw "Could not inspect release tag $tag." }
+
+          if ($matchingTags.Count -gt 0) {
+            $existingSha = (git rev-list -n 1 $tag).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($existingSha)) {
+              throw "Could not resolve existing release tag $tag."
             }
-            Write-Host "Release tag $tag already points to the verified source."
+
+            if ($existingSha -ne $env:SOURCE_SHA) {
+              if ($releaseExists) {
+                throw "Published release tag $tag already points to $existingSha, but the verified main commit is $env:SOURCE_SHA. Bump frontend/package.json to a new version before publishing another release."
+              }
+
+              # A previous failed release attempt may have created the tag before the
+              # GitHub Release itself existed. In that case the tag is unpublished and
+              # can safely be moved to the newly verified main commit.
+              git tag -f $tag $env:SOURCE_SHA
+              if ($LASTEXITCODE -ne 0) { throw "Could not update local unpublished release tag $tag." }
+              git push --force origin "refs/tags/$tag"
+              if ($LASTEXITCODE -ne 0) { throw "Could not update unpublished release tag $tag on GitHub." }
+              Write-Host "Moved unpublished release tag $tag from $existingSha to verified source $env:SOURCE_SHA."
+            }
+            else {
+              Write-Host "Release tag $tag already points to the verified source."
+            }
           }
           else {
             git tag $tag $env:SOURCE_SHA
@@ -125,21 +155,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = "v$env:RELEASE_VERSION"
-
-          # Do not use `gh release view` as an existence probe here. On Windows
-          # PowerShell, a missing release writes to stderr and becomes a terminating
-          # NativeCommandError while ErrorActionPreference is Stop.
-          $releases = gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Could not list GitHub Releases.' }
-          $releaseExists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
+          $releaseExists = $env:RELEASE_EXISTS -eq 'true'
 
           if ($releaseExists) {
             gh release upload $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) { throw "Could not update release $tag." }
           }
           else {
-            # The tag is deliberately created first. GitHub's release API can then use the
-            # existing tag without trying to create a tag for a commit that changes workflows.
+            # The verified tag already exists before release creation, so GitHub only
+            # needs to create the Release object and attach the tested installer.
             gh release create $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --generate-notes --title "TWIN A Control Center $tag"
             if ($LASTEXITCODE -ne 0) { throw "Could not create release $tag." }
           }
