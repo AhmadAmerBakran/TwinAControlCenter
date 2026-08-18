@@ -29,6 +29,26 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Refresh Angular migration lock
+        if: github.ref == 'refs/heads/improve/dependency-help-branding-2026-08' || github.head_ref == 'improve/dependency-help-branding-2026-08'
+        shell: powershell
+        run: |
+          Push-Location .\frontend
+          try {
+            npm install --package-lock-only --ignore-scripts --no-audit
+            if ($LASTEXITCODE -ne 0) { throw "Dependency lock refresh failed with exit code $LASTEXITCODE." }
+          }
+          finally { Pop-Location }
+
+      - name: Upload refreshed dependency lock
+        if: github.ref == 'refs/heads/improve/dependency-help-branding-2026-08' || github.head_ref == 'improve/dependency-help-branding-2026-08'
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-package-lock-migration
+          path: frontend/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Privacy check
         shell: powershell
         run: .\scripts\privacy-check.ps1
