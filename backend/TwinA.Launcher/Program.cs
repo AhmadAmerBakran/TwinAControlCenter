@@ -14,6 +14,8 @@ internal static class Program
     private static Process? _agent;
     private static NotifyIcon? _tray;
     private static Icon? _trayIcon;
+    private static System.Windows.Forms.Timer? _updateTimer;
+    private static bool _firstUpdateCheck = true;
     private static readonly Uri DashboardUri = new("http://127.0.0.1:5055");
 
     [STAThread]
@@ -31,6 +33,7 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         StartServices();
         CreateTrayIcon();
+        StartUpdateChecks();
 
         if (args.Any(a => a.Equals("--setup", StringComparison.OrdinalIgnoreCase)))
             _ = ConfigureIpadAccessAsync();
@@ -93,6 +96,9 @@ internal static class Program
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open TWIN A", null, (_, _) => OpenDashboard());
         menu.Items.Add("Help Center", null, (_, _) => OpenHelpCenter());
+        menu.Items.Add("Check for Updates", null, async (_, _) =>
+            await UpdateManager.CheckForUpdatesAsync(true, PrepareForUpdate, ShowUpdateStatus));
+        menu.Items.Add(new ToolStripMenuItem($"Version {UpdateManager.CurrentVersionText}") { Enabled = false });
         menu.Items.Add("Configure iPad Access", null, (_, _) => _ = ConfigureIpadAccessAsync());
         menu.Items.Add("Configure OBS Password", null, (_, _) => ConfigureObsPassword());
         menu.Items.Add("Open Tailscale", null, (_, _) => OpenTailscale());
@@ -113,6 +119,10 @@ internal static class Program
         _tray.DoubleClick += (_, _) => OpenDashboard();
         Application.ApplicationExit += (_, _) =>
         {
+            _updateTimer?.Stop();
+            _updateTimer?.Dispose();
+            _updateTimer = null;
+
             if (_tray is not null)
             {
                 _tray.Visible = false;
@@ -121,6 +131,35 @@ internal static class Program
             _trayIcon?.Dispose();
             _trayIcon = null;
         };
+    }
+
+    private static void StartUpdateChecks()
+    {
+        _updateTimer = new System.Windows.Forms.Timer { Interval = 8000 };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            if (_firstUpdateCheck)
+            {
+                _firstUpdateCheck = false;
+                _updateTimer!.Interval = 12 * 60 * 60 * 1000;
+            }
+
+            await UpdateManager.CheckForUpdatesAsync(false, PrepareForUpdate, ShowUpdateStatus);
+        };
+        _updateTimer.Start();
+    }
+
+    private static void PrepareForUpdate()
+    {
+        _updateTimer?.Stop();
+        StopServices();
+        if (_tray is not null) _tray.Visible = false;
+    }
+
+    private static void ShowUpdateStatus(string message)
+    {
+        try { _tray?.ShowBalloonTip(3000, "TWIN A Update", message, ToolTipIcon.Info); }
+        catch { }
     }
 
     private static async Task OpenDashboardWhenReadyAsync() => await OpenWhenReadyAsync(DashboardUri);

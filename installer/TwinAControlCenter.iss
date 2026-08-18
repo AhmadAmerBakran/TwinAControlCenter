@@ -66,12 +66,13 @@ Name: "{autodesktop}\TWIN A Control Center"; Filename: "{app}\launcher\{#AppExeN
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TwinAControlCenter"; ValueData: """{app}\launcher\{#AppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Tailscale"; StatusMsg: "Installing Tailscale if needed..."; Flags: runhidden waituntilterminated; Tasks: tailscale
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Obs"; StatusMsg: "Installing OBS Studio if needed..."; Flags: runhidden waituntilterminated; Tasks: obs
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Steam"; StatusMsg: "Installing Steam if needed..."; Flags: runhidden waituntilterminated; Tasks: steam
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Discord"; StatusMsg: "Installing Discord if needed..."; Flags: runhidden waituntilterminated; Tasks: discord
-Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; Description: "Start TWIN A and configure private iPad access"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\server\wwwroot\help\index.html"; Description: "Open the TWIN A Help Center"; Flags: shellexec postinstall skipifsilent unchecked
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Tailscale"; StatusMsg: "Installing Tailscale if needed..."; Flags: runhidden waituntilterminated; Tasks: tailscale; Check: not IsUpdateMode
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Obs"; StatusMsg: "Installing OBS Studio if needed..."; Flags: runhidden waituntilterminated; Tasks: obs; Check: not IsUpdateMode
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Steam"; StatusMsg: "Installing Steam if needed..."; Flags: runhidden waituntilterminated; Tasks: steam; Check: not IsUpdateMode
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-dependencies.ps1"" -Discord"; StatusMsg: "Installing Discord if needed..."; Flags: runhidden waituntilterminated; Tasks: discord; Check: not IsUpdateMode
+Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--setup"; Description: "Start TWIN A and configure private iPad access"; Flags: nowait postinstall skipifsilent; Check: not IsUpdateMode
+Filename: "{app}\launcher\{#AppExeName}"; Parameters: "--open"; Flags: nowait; Check: IsUpdateMode
+Filename: "{app}\server\wwwroot\help\index.html"; Description: "Open the TWIN A Help Center"; Flags: shellexec postinstall skipifsilent unchecked; Check: not IsUpdateMode
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/IM TwinA.Launcher.exe /T /F"; Flags: runhidden; RunOnceId: "StopTwinALauncher"
@@ -82,6 +83,11 @@ Filename: "taskkill.exe"; Parameters: "/IM TwinA.DesktopAgent.exe /T /F"; Flags:
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+function IsUpdateMode(): Boolean;
+begin
+  Result := CompareText(ExpandConstant('{param:TWINAUPDATE|0}'), '1') = 0;
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
