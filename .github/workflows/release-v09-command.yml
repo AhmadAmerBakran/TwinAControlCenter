@@ -1,93 +1,118 @@
-name: TWIN A v0.9 release command
+name: Publish verified TWIN A release
 
 on:
-  issues:
-    types: [opened]
-  pull_request:
-    types: [opened]
+  workflow_run:
+    workflows: ["Windows installer"]
+    types: [completed]
+  workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
+
+concurrency:
+  group: publish-twina-release
+  cancel-in-progress: false
 
 jobs:
   release:
     if: >-
-      github.actor == github.repository_owner &&
-      ((github.event_name == 'issues' && github.event.issue.title == 'Release TWIN A v0.9.0') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.title == 'Publish TWIN A v0.9.0 verified release'))
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: windows-latest
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v6
-        with:
-          ref: main
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Privacy check
-        shell: powershell
-        run: .\scripts\privacy-check.ps1
-
-      - name: Production dependency audit
-        shell: powershell
-        run: |
-          Push-Location .\frontend
-          try {
-            npm ci
-            if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
-            npm audit --omit=dev --audit-level=high
-            if ($LASTEXITCODE -ne 0) { throw "Production npm dependency audit failed with exit code $LASTEXITCODE." }
-          }
-          finally { Pop-Location }
-
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup --yes --no-progress
-
-      - name: Build v0.9.0 installer
-        shell: powershell
-        run: |
-          $version = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
-          if ($version -ne '0.9.0') { throw "Expected package version 0.9.0 but found $version." }
-          .\scripts\package-installer.ps1 -Version $version
-
-      - name: Installer smoke test
-        shell: powershell
-        run: .\scripts\installer-smoke-test.ps1
-
-      - name: Upload verified installer artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: TWIN-A-Control-Center-Installer-v0.9.0
-          path: artifacts/installer/TwinA-Control-Center-Setup-0.9.0-win-x64.exe
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Publish verified GitHub Release
+      - name: Resolve verified installer run
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v0.9.0'
-          $asset = (Get-ChildItem 'artifacts\installer\TwinA-Control-Center-Setup-0.9.0-win-x64.exe' | Select-Object -First 1).FullName
-          if (-not $asset) { throw 'Verified v0.9.0 installer asset was not produced.' }
+          $ErrorActionPreference = 'Stop'
 
-          gh release view $tag --json tagName *> $null
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_run') {
+            $runId = '${{ github.event.workflow_run.id }}'
+            $sourceSha = '${{ github.event.workflow_run.head_sha }}'
+          }
+          else {
+            $runs = gh run list --repo $env:GITHUB_REPOSITORY --workflow installer.yml --branch main --event push --status success --limit 1 --json databaseId,headSha | ConvertFrom-Json
+            $run = @($runs) | Select-Object -First 1
+            if ($null -eq $run) { throw 'No successful Windows installer run on main was found.' }
+            $runId = [string]$run.databaseId
+            $sourceSha = [string]$run.headSha
+          }
+
+          if ([string]::IsNullOrWhiteSpace($runId) -or [string]::IsNullOrWhiteSpace($sourceSha)) {
+            throw 'Could not resolve the verified installer run and source commit.'
+          }
+
+          "SOURCE_RUN_ID=$runId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOURCE_SHA=$sourceSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Verified installer run: $runId"
+          Write-Host "Verified source SHA: $sourceSha"
+
+      - name: Checkout verified source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify main still matches the tested commit
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch origin main --quiet
+          $mainSha = (git rev-parse origin/main).Trim()
+          if ($mainSha -ne $env:SOURCE_SHA) {
+            throw "main moved after the verified installer run. Tested: $env:SOURCE_SHA; current main: $mainSha. The next successful installer run will publish the newer commit."
+          }
+
+      - name: Download verified installer artifact
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path '.\release-artifact' | Out-Null
+          gh run download $env:SOURCE_RUN_ID --repo $env:GITHUB_REPOSITORY --name 'TWIN-A-Control-Center-Installer' --dir '.\release-artifact'
+          if ($LASTEXITCODE -ne 0) { throw "Could not download installer artifact from run $env:SOURCE_RUN_ID." }
+
+      - name: Validate installer and version
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content '.\frontend\package.json' -Raw | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'frontend/package.json does not contain a version.' }
+
+          $expectedName = "TwinA-Control-Center-Setup-$version-win-x64.exe"
+          $asset = Join-Path (Resolve-Path '.\release-artifact') $expectedName
+          if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+            $found = (Get-ChildItem '.\release-artifact' -File | Select-Object -ExpandProperty Name) -join ', '
+            throw "Expected verified installer '$expectedName' was not found. Found: $found"
+          }
+
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "v$env:RELEASE_VERSION"
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName *> $null
           $releaseExists = $LASTEXITCODE -eq 0
 
           if ($releaseExists) {
-            gh release upload $tag $asset --clobber
+            gh release upload $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Could not update release $tag." }
           }
           else {
-            gh release create $tag $asset --target main --generate-notes --title 'TWIN A Control Center v0.9.0'
+            gh release create $tag $env:RELEASE_ASSET --repo $env:GITHUB_REPOSITORY --target $env:SOURCE_SHA --generate-notes --title "TWIN A Control Center $tag"
+            if ($LASTEXITCODE -ne 0) { throw "Could not create release $tag." }
           }
+
+          Write-Host "Published TWIN A Control Center $tag from verified installer run $env:SOURCE_RUN_ID."
