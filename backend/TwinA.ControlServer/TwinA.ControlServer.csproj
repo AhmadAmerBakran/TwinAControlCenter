@@ -4,6 +4,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>
+    <Product>TWIN A Control Center</Product>
+    <Company>TWIN A</Company>
+    <Description>TWIN A Control Center local control server</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
