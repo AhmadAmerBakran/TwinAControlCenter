@@ -5,6 +5,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>..\..\installer\assets\TwinA.ico</ApplicationIcon>
+    <Product>TWIN A Control Center</Product>
+    <Company>TWIN A</Company>
+    <Description>TWIN A Control Center desktop integration agent</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="3.0.0" />
