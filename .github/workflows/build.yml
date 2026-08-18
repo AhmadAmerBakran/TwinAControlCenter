@@ -16,22 +16,51 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+
       - name: Setup Node.js 24
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
       - name: Privacy check
         shell: powershell
         run: .\scripts\privacy-check.ps1
+
       - name: Build TWIN A
         shell: powershell
         run: .\scripts\build.ps1
+
+      - name: Frontend dependency health report
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Push-Location .\frontend
+          try {
+            Write-Host '=== npm outdated ==='
+            npm outdated
+            Write-Host '=== npm audit (all dependencies) ==='
+            npm audit --audit-level=low
+          }
+          finally { Pop-Location }
+
+      - name: Backend dependency health report
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host '=== vulnerable NuGet packages (including transitive) ==='
+          dotnet list .\TwinAControlCenter.sln package --vulnerable --include-transitive
+          Write-Host '=== deprecated NuGet packages ==='
+          dotnet list .\TwinAControlCenter.sln package --deprecated
+          Write-Host '=== outdated NuGet packages ==='
+          dotnet list .\TwinAControlCenter.sln package --outdated
+
       - name: Production dependency audit
         shell: powershell
         run: |
